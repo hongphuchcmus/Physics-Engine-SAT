@@ -1,0 +1,32 @@
+#ifndef COLOR_DEF_H_
+#define COLOR_DEF_H_
+
+#define COLOR_EMPTY {1, 1, 1, 0}
+#define COLOR_TRANSPARENT {1, 1, 1, 0}
+
+#define COLOR_GRAY_50 {232, 232, 232, 255}
+#define COLOR_GRAY_100 {225, 225, 225, 255}
+#define COLOR_GRAY_200 {210, 210, 210, 255}
+#define COLOR_GRAY_300 {180, 180, 180, 255}
+#define COLOR_GRAY_400 {150, 150, 150, 255}
+#define COLOR_GRAY_500 {125, 125, 125, 255}
+#define COLOR_GRAY_600 {100, 100, 100, 255}
+#define COLOR_GRAY_700 {75, 75, 75, 255}
+#define COLOR_GRAY_800 {50, 50, 50, 255}
+#define COLOR_GRAY_900 {25, 25, 25, 255}
+
+#define COLOR_CYAN_50 {135, 235, 255, 255}
+#define COLOR_CYAN_100 {120, 220, 250, 255}
+#define COLOR_CYAN_200 {90, 180, 230, 255}
+#define COLOR_CYAN_300 {85, 175, 220, 255}
+#define COLOR_CYAN_400 {80, 170, 215, 255}
+#define COLOR_CYAN_500 {80, 170, 210, 255}
+#define COLOR_CYAN_600 {75, 155, 200, 255}
+#define COLOR_CYAN_700 {70, 145, 195, 255}
+#define COLOR_CYAN_800 {65, 140, 190, 255}
+#define COLOR_CYAN_900 {60, 130, 180, 255}
+
+#define COLOR_WHITE {255, 255, 255, 255}
+#define COLOR_BLACK {0, 0, 0, 255}
+
+#endif
