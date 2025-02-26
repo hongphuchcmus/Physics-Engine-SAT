@@ -36,7 +36,7 @@ typedef struct UIState{
   bool* pauseToggled;
   bool* pauseEnabled;
 
-  char* collisionInfoText;
+  char* manifoldText;
   char* cubePhysicsInfoText;
   char* dodecaPhysicsInfoText;
 } UIState;

@@ -34,27 +34,28 @@ int main(void)
   };
   
   Mesh cube = GenConvexCube((Vector3){5, 1, 5});
-  Mesh dodecahedron = GenMeshSphere(1, 4, 8); //GenDodecahedron(1.0f);
+  Mesh dodecahedron = GenMeshSphere(1, 8, 16); //GenDodecahedron(1.0f);
   Model cubeModel = LoadModelFromMesh(cube);
   Model dodecaModel = LoadModelFromMesh(dodecahedron);
   
   UIState uiState = GuiInit();
 
-  PhysicsBody cubePhysBody = LoadPhysicsBodyFromMesh(cube);
+  PhysicsBody cubePhysBody = LoadPhysicsBodyFromConvexMesh(cube);
   TextCopy(cubePhysBody.bodyName, "Cube");
-  SetColliderType(&cubePhysBody, COLLIDER_TYPE_STATIC);
+  cubePhysBody.colliderType = COLLIDER_TYPE_STATIC;
   cubePhysBody.position = GetVector3FromEditText(uiState.cubePositionEditText);
-  PhysicsBody dodecaPhysBody = LoadPhysicsBodyFromMesh(dodecahedron);
-  TextCopy(dodecaPhysBody.bodyName, "Dodeca");
-  dodecaPhysBody.position = GetVector3FromEditText(uiState.dodecaPositionEditText);
   Vector3 euler = Vector3Scale(GetVector3FromEditText(uiState.cubeRotationEditText), DEG2RAD);
   cubePhysBody.rotation = QuaternionFromEuler(euler.x, euler.y, euler.z); 
+  
+  PhysicsBody dodecaPhysBody = LoadPhysicsBodySphere(1); //LoadPhysicsBodyFromMesh(dodecahedron);
+  TextCopy(dodecaPhysBody.bodyName, "Dodeca");
+  dodecaPhysBody.position = GetVector3FromEditText(uiState.dodecaPositionEditText);
   euler = Vector3Scale(GetVector3FromEditText(uiState.dodecaRotationEditText), DEG2RAD);
   dodecaPhysBody.rotation = QuaternionFromEuler(euler.x, euler.y, euler.z); 
-
+  
   physicsTimeScale = 0.0f;
 
-  Manifold lastColInfo = {0};
+  Manifold lastManifold = {0};
 
   SetExitKey(0);
   while (!WindowShouldClose())
@@ -70,8 +71,8 @@ int main(void)
     float deltaTime = GetFrameTime();
     PhysicsBodyUpdate(&dodecaPhysBody, deltaTime);
     PhysicsBodyUpdate(&cubePhysBody, deltaTime);
-    Manifold colInfo = CheckCollisionPhysicsBodies(&cubePhysBody, &dodecaPhysBody);
-    ResolveCollisionPhysicsBodies(&cubePhysBody, &dodecaPhysBody, &colInfo, deltaTime);
+    Manifold manifold = CheckCollisionPhysicsBodies(&cubePhysBody, &dodecaPhysBody);
+    ResolveCollisionPhysicsBodies(&cubePhysBody, &dodecaPhysBody, &manifold, deltaTime);
     
     if (*uiState.cubePositionEditSubmitted){
       cubePhysBody.position = GetVector3FromEditText(uiState.cubePositionEditText);
@@ -80,7 +81,7 @@ int main(void)
     }
     
     if (*uiState.pauseEnabled == false || *uiState.nextPressed == true){
-      lastColInfo = colInfo;
+      lastManifold = manifold;
     }
 
     if (*uiState.cubeRotationEditSubmitted){
@@ -108,7 +109,7 @@ int main(void)
     // PhysicsBodyToString(&cubePhysBody, uiState.cubePhysicsInfoText);
     // PhysicsBodyToString(&dodecaPhysBody, uiState.dodecaPhysicsInfoText);
 
-    ManifoldToString(&lastColInfo, uiState.collisionInfoText);
+    ManifoldToString(&lastManifold, uiState.manifoldText);
 
     bool wireframe = *uiState.wireframeEnabled; 
     UpdateCam(&camera, &camSettings);
@@ -122,47 +123,54 @@ int main(void)
         QuaternionToAxisAngle(cubePhysBody.rotation, &axisRot, &angleRot);
         angleRot *= RAD2DEG;
         if (!wireframe)
-          DrawModelEx(cubeModel, cubePhysBody.position, axisRot, angleRot, (Vector3){1, 1, 1}, lastColInfo.overlapping ? DARKGRAY : RED);
+          DrawModelEx(cubeModel, cubePhysBody.position, axisRot, angleRot, (Vector3){1, 1, 1}, lastManifold.overlapping ? DARKGRAY : RED);
         DrawModelWiresEx(cubeModel, cubePhysBody.position, axisRot, angleRot, (Vector3){1, 1, 1}, ORANGE);
         
         QuaternionToAxisAngle(dodecaPhysBody.rotation, &axisRot, &angleRot);
         angleRot *= RAD2DEG;
         if (!wireframe)
-          DrawModelEx(dodecaModel, dodecaPhysBody.position, axisRot, angleRot, (Vector3){1, 1, 1}, lastColInfo.overlapping ? DARKGRAY : RED);
+          DrawModelEx(dodecaModel, dodecaPhysBody.position, axisRot, angleRot, (Vector3){1, 1, 1}, lastManifold.overlapping ? DARKGRAY : RED);
         DrawModelWiresEx(dodecaModel, dodecaPhysBody.position, axisRot, angleRot, (Vector3){1, 1, 1}, ORANGE);
         
-        DrawBoundingBox(PhysicsBodyGetWorldBoundingBoxMargin(&cubePhysBody, 0.01f), lastColInfo.overlapping ? ORANGE : GRAY);
-        DrawBoundingBox(PhysicsBodyGetWorldBoundingBoxMargin(&dodecaPhysBody, 0.01f), lastColInfo.overlapping ? ORANGE : GRAY);
+        DrawBoundingBox(PhysicsBodyGetWorldBoundingBoxMargin(&cubePhysBody, 0.01f), lastManifold.overlapping ? ORANGE : GRAY);
+        DrawBoundingBox(PhysicsBodyGetWorldBoundingBoxMargin(&dodecaPhysBody, 0.01f), lastManifold.overlapping ? ORANGE : GRAY);
 
-        if (lastColInfo.overlapping){
-          Vector3 offset = GetCenterOfContactPoints(&lastColInfo);
+        if (lastManifold.overlapping){
+          Vector3 offset = GetCenterOfContactPoints(&lastManifold);
           //Draw sep axis 
-          DrawLine3D(Vector3Add(Vector3Scale(Vector3Negate(lastColInfo.seperationAxis), 1000.0f), offset), Vector3Add(Vector3Scale(lastColInfo.seperationAxis, 1000.0f), offset), GREEN);
+          DrawLine3D(Vector3Add(Vector3Scale(Vector3Negate(lastManifold.seperationAxis), 1000.0f), offset), Vector3Add(Vector3Scale(lastManifold.seperationAxis, 1000.0f), offset), GREEN);
           // Draw collision points & normals
-          for (int32_t i = 0; i <lastColInfo.contactPointCount; i++)
+          for (int32_t i = 0; i <lastManifold.contactPointCount; i++)
           {
-            DrawSphere(lastColInfo.contactPoints[i], 0.1f, GREEN);
-            DrawLine3D(lastColInfo.contactPoints[i], Vector3Add(lastColInfo.contactPoints[i], lastColInfo.contactNormals[i]), SKYBLUE);
+            DrawSphere(lastManifold.contactPoints[i], 0.1f, GREEN);
+            DrawLine3D(lastManifold.contactPoints[i], Vector3Add(lastManifold.contactPoints[i], lastManifold.contactNormals[i]), SKYBLUE);
           }
         } else {
           Vector3 offset = dodecaPhysBody.position;
-          DrawLine3D(Vector3Add(Vector3Scale(Vector3Negate(lastColInfo.seperationAxis), 1000.0f), offset), Vector3Add(Vector3Scale(lastColInfo.seperationAxis, 1000.0f), offset), PINK);
+          DrawLine3D(Vector3Add(Vector3Scale(Vector3Negate(lastManifold.seperationAxis), 1000.0f), offset), Vector3Add(Vector3Scale(lastManifold.seperationAxis, 1000.0f), offset), PINK);
         }
 
         // Draw colliding edges
-        if (lastColInfo.collisionType == COLLISION_TYPE_EDGE_TO_EDGE){
-          DrawSphere(lastColInfo.edge1Start, 0.05f, PURPLE);
-          DrawSphere(lastColInfo.edge1End, 0.05f, PURPLE);
-          DrawSphere(lastColInfo.edge2Start, 0.05f, PURPLE);
-          DrawSphere(lastColInfo.edge2End, 0.05f, PURPLE);
+        if (lastManifold.collisionType == COLLISION_TYPE_EDGE_TO_EDGE){
+          DrawSphere(lastManifold.edge1Start, 0.05f, PURPLE);
+          DrawSphere(lastManifold.edge1End, 0.05f, PURPLE);
+          DrawSphere(lastManifold.edge2Start, 0.05f, PURPLE);
+          DrawSphere(lastManifold.edge2End, 0.05f, PURPLE);
 
-          DrawLine3D(lastColInfo.edge1Start, lastColInfo.edge1End, RED);
-          DrawLine3D(lastColInfo.edge2Start, lastColInfo.edge2End, RED);
+          DrawLine3D(lastManifold.edge1Start, lastManifold.edge1End, RED);
+          DrawLine3D(lastManifold.edge2Start, lastManifold.edge2End, RED);
         }
+        
+        DrawPhysicsBodyEdges(&cubePhysBody);
+        DrawSphere(lastManifold.nearestEdgeOverlap, 0.1f, YELLOW);
+        //Draw axis
+        DrawLine3D(Vector3Add(Vector3Scale(Vector3Negate(lastManifold.nearestEdgeAxis), 1000.0f), manifold.nearestEdgeOverlap), Vector3Add(Vector3Scale(lastManifold.nearestEdgeAxis, 1000.0f), manifold.nearestEdgeOverlap), BLUE);
+
         DrawGrid(20, 1.0f);
       EndMode3D();
       GuiDraw(renderCommands, uiState);
       DrawFPS(0, 0);
+      DrawPhysicsBodyVertexIndices(&cubePhysBody, camera);
     EndDrawing();
   }
   CloseWindow();

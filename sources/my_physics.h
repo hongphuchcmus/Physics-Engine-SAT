@@ -13,9 +13,20 @@
 #define COLLISION_TYPE_FACE_TO_VERTEX 0
 #define COLLISION_TYPE_VERTEX_TO_FACE 1
 #define COLLISION_TYPE_EDGE_TO_EDGE 2
+#define COLLISION_TYPE_SPHERES 3
+#define COLLISION_TYPE_SPHERE_TO_FACE 4
+#define COLLISION_TYPE_FACE_TO_SPHERE 5
+#define COLLISION_TYPE_SPHERE_TO_EDGE 6
+#define COLLISION_TYPE_EDGE_TO_SPHERE 7
+
+
 #define COLLIDER_TYPE_STATIC 0
 #define COLLIDER_TYPE_RIGID 1
 #define COLLIDER_STATIC_MASS 1e20f
+
+#define COLLIDER_SHAPE_CONVEX 0
+#define COLLIDER_SHAPE_SPHERE 1
+
 
 typedef struct Manifold {
   int32_t collisionType; 
@@ -31,6 +42,10 @@ typedef struct Manifold {
   Vector3 edge1End;
   Vector3 edge2Start;
   Vector3 edge2End;
+
+  // Sphere debug
+  Vector3 nearestEdgeAxis;
+  Vector3 nearestEdgeOverlap;
 } Manifold;
 
 typedef struct PhysicsBody {
@@ -44,7 +59,7 @@ typedef struct PhysicsBody {
   Vector3* faceNormals;
   int32_t faceNormalCount;
   // reference vertices and faceNormals, 2 entries form a face : (vertex on face, face normal)
-  // Face normal index references will be offset by one
+  // face normal index references will be offset by one
   // and be negative if the face is facing the opposite direction
   int32_t* faces;
   int32_t faceCount; 
@@ -55,21 +70,27 @@ typedef struct PhysicsBody {
   Vector3 angularVelocity;
   Vector3 position;
   float mass;
-  BoundingBox localBoundingBox;
+  // Bounding box at world orgin, with no rotation 
+  BoundingBox boundingBox;
   int32_t colliderType;
   float inertia;
   
   char bodyName[100]; 
+
+  int32_t colliderShape;
+  // For sphere shape
+  float radius;
+
 } PhysicsBody;
 
 Vector3 GetCenterOfContactPoints(Manifold* colInfo);
-PhysicsBody LoadPhysicsBodyFromMesh(Mesh mesh);
+PhysicsBody LoadPhysicsBodyFromConvexMesh(Mesh mesh);
+PhysicsBody LoadPhysicsBodySphere(float radius);
 void UnloadPhysicsBody(PhysicsBody physicsBody);
 Manifold CheckCollisionPhysicsBodies(const PhysicsBody* body1, const PhysicsBody* body2);
 void DrawFaceNormals(PhysicsBody physicsBody);
 void DrawFaceNormalCoords(PhysicsBody physicsBody, Camera camera);
 void DrawPhysicsVertexIndices(PhysicsBody physicsBody, Camera camera);
-void SetColliderType(PhysicsBody* physicsBody, int32_t colliderType);
 void PhysicsBodyUpdate(PhysicsBody* physicsBody, float delta);
 void PhysicsBodyAddImpulse(PhysicsBody* physicsBody, float delta, Vector3 impulse);
 void ResolveCollisionPhysicsBodies(PhysicsBody* body1, PhysicsBody* body2, Manifold* colInfo, float delta);
@@ -80,5 +101,8 @@ BoundingBox PhysicsBodyGetWorldBoundingBoxMargin(PhysicsBody* physicsBody, float
 float InvInertia(PhysicsBody* physicsBody);
 float InvMass(PhysicsBody* physicsBody);
 float PhysicsBodyToString(const PhysicsBody* physicsBody, char* buffer);
+void DrawPhysicsBodyEdges(PhysicsBody* physicsBody);
+void DrawPhysicsBodyVertexIndices(const PhysicsBody* physicsBody, Camera camera);
+void DrawPhysicsBodyVertices(PhysicsBody* physicsBody);
 
 #endif

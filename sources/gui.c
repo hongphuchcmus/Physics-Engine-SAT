@@ -1,6 +1,6 @@
 #include "gui.h"
 
-static void fHandleClayErrors(Clay_ErrorData errorData){
+static void f_HandleClayErrors(Clay_ErrorData errorData){
   TraceLog(LOG_ERROR, errorData.errorText.chars);
 }
 
@@ -24,7 +24,7 @@ UIState GuiInit()
   uiState.cubeRotationEditMode = MEM_NEW(&uiState.memArena, bool, 1);
   uiState.cubeRotationEditSubmitted = MEM_NEW(&uiState.memArena, bool, 1);
 
-  uiState.collisionInfoText = MEM_NEW(&uiState.memArena, char, 256);
+  uiState.manifoldText = MEM_NEW(&uiState.memArena, char, 256);
 
   uiState.dodecaRotationEditText = MEM_NEW(&uiState.memArena, char, 100);
   uiState.dodecaRotationEditMode = MEM_NEW(&uiState.memArena, bool, 1);
@@ -52,7 +52,7 @@ UIState GuiInit()
   Clay_Initialize(clayMemory, (Clay_Dimensions){
     .width =  GetScreenWidth(),
     .height = GetScreenHeight()
-  }, (Clay_ErrorHandler){fHandleClayErrors});
+  }, (Clay_ErrorHandler){f_HandleClayErrors});
 
   uiState.fonts[FONT_DEFAULT_ID] = LoadFontEx(FONT_DEFAULT, 16, 0, 400);
   uiState.fonts[FONT_MONO_ID] = LoadFontEx(FONT_MONO, 16, 0, 400);
@@ -200,21 +200,11 @@ GuiUpdate(UIState* uiState)
             .height = CLAY_SIZING_GROW(0)
           }, "Next", uiState->nextPressed);
         }
-        Clay_String colInfoClayText = CustomClay_ToClayString(uiState->collisionInfoText);
-        CLAY_TEXT(colInfoClayText, CLAY_TEXT_CONFIG({
+        Clay_String manifoldClayText = CustomClay_ToClayString(uiState->manifoldText);
+        CLAY_TEXT(manifoldClayText, CLAY_TEXT_CONFIG({
           .fontSize = 16,
           .textColor = COLOR_BLACK
         }));
-        // Clay_String cubePhysicsInfoClayText = CustomClay_ToClayString(uiState->cubePhysicsInfoText);
-        // CLAY_TEXT(cubePhysicsInfoClayText, CLAY_TEXT_CONFIG({
-        //   .fontSize = 16,
-        //   .textColor = COLOR_BLACK
-        // }));
-        // Clay_String dodecaPhysicsInfoClayText = CustomClay_ToClayString(uiState->dodecaPhysicsInfoText);
-        // CLAY_TEXT(dodecaPhysicsInfoClayText, CLAY_TEXT_CONFIG({
-        //   .fontSize = 16,
-        //   .textColor = COLOR_BLACK
-        // }));
         
       }
     }
