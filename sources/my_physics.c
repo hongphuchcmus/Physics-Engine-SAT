@@ -2,19 +2,63 @@
 
 float physicsTimeScale = 1.0f;
 
+// Find the area of a convex polygon in 3D space
+static float f_AreaConvexPoly(Vector3* vertices, int32_t vertexCount){
+ if (vertexCount < 3){ 
+  return 0;
+ }
+ // First we have to sort the vertices
+ Vector3 center = {0};
+ for (int32_t i = 0; i < vertexCount; i++){
+  center = Vector3Add(center, vertices[i]);
+ }
+ center = Vector3Scale(center, 1.0f / vertexCount);
+ Vector3 refNormal = Vector3CrossProduct(Vector3Subtract(vertices[0], center), Vector3Subtract(vertices[1], center));
+ 
+ for (int32_t i = 0; i < vertexCount-1; i++)
+ {
+  bool swapped = false;
+  for (int32_t j = 0; j < vertexCount-1-i; j++)
+  {
+    Vector3 a = vertices[i]; Vector3 b = vertices[j];
+    Vector3 va = Vector3Subtract(a, center);
+    Vector3 vb = Vector3Subtract(b, center);
+
+    float dot = Vector3DotProduct(va, vb);
+    Vector3 cross = Vector3CrossProduct(va, vb);
+    float sign = Vector3DotProduct(cross, refNormal);
+    if (sign > 0 || (fabs(sign) < 1e-4f && dot > 0)){
+      Vector3 temp = vertices[i];
+      vertices[i] = vertices[j];
+      vertices[j] = temp;
+      swapped = true;
+    }
+  }
+  if (!swapped) break;
+ }
+ 
+ float totalArea = 0;
+ for (int32_t i = 0; i < vertexCount -1; i++)
+ {
+  Vector3 edge1 = Vector3Subtract(vertices[i], center);
+  Vector3 edge2 = Vector3Subtract(vertices[i+1], center);
+  float area = 0.5f * Vector3Length(Vector3CrossProduct(edge1, edge2));
+  totalArea += area;
+ }
+ return totalArea;
+}
+
 // Return the index of the face removed
-static int f_RemoveTriangle(PhysicsBody* physicsBody, Triangle triangle){
+static int f_RemoveTriangle(PhysicsBody *physicsBody, Triangle triangle) {
   Vector3 refPoint = triangle.p1;
   Vector3 refNormal = GetTriangleNormal(triangle);
-  for (int32_t i = 0; i < physicsBody->faceCount; i++)
-  {
+  for (int32_t i = 0; i < physicsBody->faceCount; i++) {
     Vector3 v1 = physicsBody->vertices[physicsBody->faces[2 * i]];
     Vector3 normal = physicsBody->faceNormals[abs(physicsBody->faces[2 * i + 1]) - 1];
     if (physicsBody->faces[2 * i + 1] < 0) {
       normal = Vector3Negate(normal);
     }
-    if (Vector3LengthSqr(Vector3Subtract(v1, refPoint)) < 1e-4f
-      && Vector3LengthSqr(Vector3Subtract(normal, refNormal)) < 1e-4f){
+    if (Vector3LengthSqr(Vector3Subtract(v1, refPoint)) < 1e-4f && Vector3LengthSqr(Vector3Subtract(normal, refNormal)) < 1e-4f) {
       physicsBody->faces[2 * i] = physicsBody->faces[2 * physicsBody->faceCount - 2];
       physicsBody->faces[2 * i + 1] = physicsBody->faces[2 * physicsBody->faceCount - 1];
       physicsBody->faceCount--;
@@ -25,122 +69,116 @@ static int f_RemoveTriangle(PhysicsBody* physicsBody, Triangle triangle){
 }
 
 // Load 3 vertices of a triangle from a mesh
-static Vector3* f_GetTriangleVertices(const Mesh* mesh, int32_t triangleIndex, Vector3* vertices) {
-    if (mesh->indices != NULL) {
-        for (int i = 0; i < 3; i++) {
-            int idx = mesh->indices[triangleIndex*3 + i] * 3;
-            vertices[i] = (Vector3){
-                mesh->vertices[idx],
-                mesh->vertices[idx + 1],
-                mesh->vertices[idx + 2]
-            };
-        }
-    } else {
-        for (int i = 0; i < 3; i++) {
-            int idx = triangleIndex*9 + i*3;
-            vertices[i] = (Vector3){
-                mesh->vertices[idx],
-                mesh->vertices[idx + 1],
-                mesh->vertices[idx + 2]
-            };
-        }
+static Vector3 *f_GetTriangleVertices(const Mesh *mesh, int32_t triangleIndex, Vector3 *vertices) {
+  if (mesh->indices != NULL) {
+    for (int i = 0; i < 3; i++) {
+      int idx = mesh->indices[triangleIndex * 3 + i] * 3;
+      vertices[i] = (Vector3){
+          mesh->vertices[idx],
+          mesh->vertices[idx + 1],
+          mesh->vertices[idx + 2]};
     }
-    return vertices;
+  } else {
+    for (int i = 0; i < 3; i++) {
+      int idx = triangleIndex * 9 + i * 3;
+      vertices[i] = (Vector3){
+          mesh->vertices[idx],
+          mesh->vertices[idx + 1],
+          mesh->vertices[idx + 2]};
+    }
+  }
+  return vertices;
 }
 
-static void f_RemoveEdge(Edge edge, PhysicsBody* physicsBody){
+static void f_RemoveEdge(Edge edge, PhysicsBody *physicsBody) {
   int32_t v1Idx = -1;
   int32_t v2Idx = -1;
-  for (int32_t i = 0; i < physicsBody->vertexCount; i++){
-    if (v1Idx < 0 && Vector3Equals(physicsBody->vertices[i], edge.p1)){
+  for (int32_t i = 0; i < physicsBody->vertexCount; i++) {
+    if (v1Idx < 0 && Vector3Equals(physicsBody->vertices[i], edge.p1)) {
       v1Idx = i;
     }
-    if (v2Idx < 0 && Vector3Equals(physicsBody->vertices[i], edge.p2)){
+    if (v2Idx < 0 && Vector3Equals(physicsBody->vertices[i], edge.p2)) {
       v2Idx = i;
     }
   }
-  if (v1Idx < 0 || v2Idx < 0){
+  if (v1Idx < 0 || v2Idx < 0) {
     return;
   }
-  for (int32_t i = 0; i < 2 * physicsBody->edgeCount; i+=2)
-  {
-    if ((physicsBody->edges[i] == v1Idx && physicsBody->edges[i+1] == v2Idx)
-      || (physicsBody->edges[i] == v2Idx && physicsBody->edges[i+1] == v1Idx)){
+  for (int32_t i = 0; i < 2 * physicsBody->edgeCount; i += 2) {
+    if ((physicsBody->edges[i] == v1Idx && physicsBody->edges[i + 1] == v2Idx) || (physicsBody->edges[i] == v2Idx && physicsBody->edges[i + 1] == v1Idx)) {
       physicsBody->edges[i] = physicsBody->edges[2 * physicsBody->edgeCount - 2];
-      physicsBody->edges[i+1] = physicsBody->edges[2 * physicsBody->edgeCount - 1];
+      physicsBody->edges[i + 1] = physicsBody->edges[2 * physicsBody->edgeCount - 1];
       physicsBody->edgeCount--;
       break;
     }
   }
 }
 
-// Return the smallest depth and axis to the nearest edge 
+// Return the smallest depth and axis to the nearest edge
 // Threshold is the minimum distance for the selection to happen
-static float f_NearestEdgeAxis(const PhysicsBody* sphere, const PhysicsBody* convex, Vector3* outAxis, Vector3* overlapPoint){
+static float f_NearestEdgeAxis(const PhysicsBody *sphere, const PhysicsBody *convex, Vector3 *outAxis, Vector3 *overlapPoint) {
   float minDistanceSqr = 1e30f;
   Vector3 minToEdge = {0};
-  for (int32_t i = 0; i < 2 * convex->edgeCount; i += 2)
-  {
-    //         p      
+  for (int32_t i = 0; i < 2 * convex->edgeCount; i += 2) {
+    //         p
     //        /|\     
     //       / | \    
     //      /  |  \   
-    //    v1---o---v2 
+    //    v1---o---v2
     //    <__t_>
     Vector3 v1 = Vector3Add(convex->position, Vector3RotateByQuaternion(convex->vertices[convex->edges[i]], convex->rotation));
-    Vector3 v2 = Vector3Add(convex->position, Vector3RotateByQuaternion(convex->vertices[convex->edges[i+1]], convex->rotation));
+    Vector3 v2 = Vector3Add(convex->position, Vector3RotateByQuaternion(convex->vertices[convex->edges[i + 1]], convex->rotation));
     Vector3 v1v2 = Vector3Subtract(v2, v1);
     Vector3 v1p = Vector3Subtract(sphere->position, v1);
     float v1v2MagSqr = Vector3LengthSqr(v1v2);
-    float t = Vector3DotProduct(v1p, v1v2) / v1v2MagSqr; // 0 <= t <= 1
-    if (t < 0){
+    float t = Vector3DotProduct(v1p, v1v2) / v1v2MagSqr;  // 0 <= t <= 1
+    if (t < 0) {
       t = 0;
-    } else if (t > 1){
+    } else if (t > 1) {
       t = 1;
     }
     Vector3 closestPoint = Vector3Add(v1, Vector3Scale(v1v2, t));
     Vector3 toEdge = Vector3Subtract(closestPoint, sphere->position);
     float distanceSqr = Vector3LengthSqr(toEdge);
-    if ( distanceSqr < minDistanceSqr){
+    if (distanceSqr < minDistanceSqr) {
       minDistanceSqr = distanceSqr;
       minToEdge = toEdge;
     }
   }
   // No overlapping with this edge
-  if (minDistanceSqr > sphere->radius * sphere->radius){
+  if (minDistanceSqr > sphere->radius * sphere->radius) {
     *outAxis = Vector3Normalize(minToEdge);
     *overlapPoint = Vector3Add(sphere->position, minToEdge);
     return -1;
   }
   float minToEdgeMag = sqrtf(minDistanceSqr);
   *outAxis = Vector3Scale(minToEdge, 1.0f / minToEdgeMag);
-  *overlapPoint = Vector3Add(sphere->position, minToEdge); 
+  *overlapPoint = Vector3Add(sphere->position, minToEdge);
   return sphere->radius - minToEdgeMag;
 }
 
 // Find the distance between two edges, return the interaction on the first line
-static float f_LineToLineDistanceSqr(Vector3 p1, Vector3 q1, Vector3 p2, Vector3 q2, Vector3 *outR1)
-{
+static float f_LineToLineDistanceSqr(Vector3 p1, Vector3 q1, Vector3 p2, Vector3 q2, Vector3 *outR1) {
   // Segment 1 Direction (Non Unit)
   Vector3 e1 = Vector3Subtract(q1, p1);
   // Segment 2 Direction (Non Unit)
   Vector3 e2 = Vector3Subtract(q2, p2);
-  
-  // Any points on these two segements 
+
+  // Any points on these two segements
   // r1 = p1 + t1 * e1  0<=t1<=1
   // r2 = p2 + t2 * e2  0<=t1<=1
-  
+
   // The line connect the two segments
   Vector3 n = Vector3CrossProduct(e1, e2);
 
   // If two segments nearly parrallel,
   // return distance from one point on segment 1 to segment 2
-  if (Vector3LengthSqr(n) < 0.0001f){
+  if (Vector3LengthSqr(n) < 0.0001f) {
     // Formula:
     // d^2 = ((p2-p1) x e1).((p2-p1) x e1) / (e2.e2)
-    
+
     // For the intersection, let choose the middle point of the shorert segment
-    if (Vector3LengthSqr(e1) < Vector3LengthSqr(e2)){
+    if (Vector3LengthSqr(e1) < Vector3LengthSqr(e2)) {
       *outR1 = Vector3Add(p1, Vector3Scale(e1, 0.5f));
     } else {
       *outR1 = Vector3Add(p2, Vector3Scale(e2, 0.5f));
@@ -148,46 +186,40 @@ static float f_LineToLineDistanceSqr(Vector3 p1, Vector3 q1, Vector3 p2, Vector3
     float dSqr = Vector3LengthSqr(Vector3CrossProduct(Vector3Subtract(p2, p1), e1)) / Vector3LengthSqr(e1);
     return dSqr;
   }
-  
+
   // Find the closest point to the other line on each segment
   // t1 = (e2 x n).(p2-p1) / (n.n)
   // t2 = (e1 x n).(p2-p1) / (n.n)
   float t1 = Vector3DotProduct(Vector3CrossProduct(e2, n), Vector3Subtract(p2, p1)) / Vector3LengthSqr(n);
   float t2 = Vector3DotProduct(Vector3CrossProduct(e1, n), Vector3Subtract(p2, p1)) / Vector3LengthSqr(n);
-  
+
   // Clamp to segment range [0,1]
   t1 = Clamp(t1, 0.0f, 1.0f);
   t2 = Clamp(t2, 0.0f, 1.0f);
-  
+
   Vector3 r1 = Vector3Add(p1, Vector3Scale(e1, t1));
   Vector3 r2 = Vector3Add(p2, Vector3Scale(e2, t2));
   *outR1 = r1;
-  
+
   return Vector3LengthSqr(Vector3Subtract(r1, r2));
 }
 
 // Find the face that align nearest to the seperation axis
-static void f_FindMostAlignedFace(const PhysicsBody *body, Vector3 axis, Vector3 *outPoint, Vector3 *outNormal)
-{
+static void f_FindMostAlignedFace(const PhysicsBody *body, Vector3 axis, Vector3 *outPoint, Vector3 *outNormal) {
   float maxDot = -1.0f;
   float epsilon = 1e-4f;
-  for (int32_t i = 0; i < 2 * body->faceCount; i += 2)
-  {
+  for (int32_t i = 0; i < 2 * body->faceCount; i += 2) {
     Vector3 point = body->vertices[body->faces[i]];
     Vector3 normal = {0};
-    if (body->faces[i + 1] > 0)
-    {
+    if (body->faces[i + 1] > 0) {
       normal = body->faceNormals[body->faces[i + 1] - 1];
-    }
-    else
-    {
+    } else {
       normal = Vector3Negate(body->faceNormals[-body->faces[i + 1] - 1]);
     }
     point = Vector3Add(Vector3RotateByQuaternion(point, body->rotation), body->position);
     normal = Vector3RotateByQuaternion(normal, body->rotation);
     float dot = Vector3DotProduct(normal, axis);
-    if (dot > maxDot)
-    {
+    if (dot > maxDot) {
       maxDot = dot;
       *outPoint = point;
       *outNormal = normal;
@@ -195,16 +227,14 @@ static void f_FindMostAlignedFace(const PhysicsBody *body, Vector3 axis, Vector3
   }
 }
 
-static float f_DistanceToPlane(Vector3 point, Vector3 planePoint, Vector3 planeNormal)
-{
+static float f_DistanceToPlane(Vector3 point, Vector3 planePoint, Vector3 planeNormal) {
   float planeD = -Vector3DotProduct(planeNormal, planePoint);
   // planeNormal must be normalized
   float d = Vector3DotProduct(planeNormal, point) + planeD;
   return d;
 }
 
-static Vector3 f_ProjectOntoPlane(Vector3 point, Vector3 planePoint, Vector3 planeNormal)
-{
+static Vector3 f_ProjectOntoPlane(Vector3 point, Vector3 planePoint, Vector3 planeNormal) {
   float planeD = -Vector3DotProduct(planeNormal, planePoint);
   // planeNormal must be normalized
   float d = Vector3DotProduct(planeNormal, point) + planeD;
@@ -212,23 +242,19 @@ static Vector3 f_ProjectOntoPlane(Vector3 point, Vector3 planePoint, Vector3 pla
 }
 
 // Return the depth of penertration, return -1 if no overlapping occured
-static float f_CheckConvexOverlap(const PhysicsBody *body1, const PhysicsBody *body2, Vector3 axis)
-{
+static float f_CheckConvexOverlap(const PhysicsBody *body1, const PhysicsBody *body2, Vector3 axis) {
   float minBody1Comp = 1e30f;
   int32_t minBody1Vertex = 0;
   float maxBody1Comp = -1e30f;
   int32_t maxBody1Vertex = 0;
-  for (int i = 0; i < body1->vertexCount; i++)
-  {
+  for (int i = 0; i < body1->vertexCount; i++) {
     Vector3 vertex = Vector3Add(Vector3RotateByQuaternion(body1->vertices[i], body1->rotation), body1->position);
     float comp = Vector3DotProduct(vertex, axis);
-    if (comp < minBody1Comp)
-    {
+    if (comp < minBody1Comp) {
       minBody1Comp = comp;
       minBody1Vertex = i;
     }
-    if (comp > maxBody1Comp)
-    {
+    if (comp > maxBody1Comp) {
       maxBody1Comp = comp;
       maxBody1Vertex = i;
     }
@@ -239,31 +265,27 @@ static float f_CheckConvexOverlap(const PhysicsBody *body1, const PhysicsBody *b
   float maxBody2Comp = -1e30f;
   int32_t maxBody2Vertex = 0;
 
-  for (int i = 0; i < body2->vertexCount; i++)
-  {
+  for (int i = 0; i < body2->vertexCount; i++) {
     Vector3 vertex = Vector3Add(Vector3RotateByQuaternion(body2->vertices[i], body2->rotation), body2->position);
     float comp = Vector3DotProduct(vertex, axis);
-    if (comp < minBody2Comp)
-    {
+    if (comp < minBody2Comp) {
       minBody2Comp = comp;
       minBody2Vertex = i;
     }
-    if (comp > maxBody2Comp)
-    {
+    if (comp > maxBody2Comp) {
       maxBody2Comp = comp;
       maxBody2Vertex = i;
     }
   }
   float maxOfMin = minBody1Comp > minBody2Comp ? minBody1Comp : minBody2Comp;
   float minOfMax = maxBody1Comp < maxBody2Comp ? maxBody1Comp : maxBody2Comp;
-  if (maxOfMin > minOfMax)
-  {
+  if (maxOfMin > minOfMax) {
     return -1;
   }
   return minOfMax - maxOfMin;
 }
 
-static float f_CheckSphereOverlap(const PhysicsBody *body1, const PhysicsBody *body2){
+static float f_CheckSphereOverlap(const PhysicsBody *body1, const PhysicsBody *body2) {
   Vector3 axis = Vector3Normalize(Vector3Subtract(body2->position, body1->position));
   float minBody1Comp = Vector3DotProduct(axis, Vector3Add(body1->position, Vector3Scale(axis, -body1->radius)));
   float maxBody1Comp = Vector3DotProduct(axis, Vector3Add(body1->position, Vector3Scale(axis, body1->radius)));
@@ -272,38 +294,34 @@ static float f_CheckSphereOverlap(const PhysicsBody *body1, const PhysicsBody *b
 
   float maxOfMin = minBody1Comp > minBody2Comp ? minBody1Comp : minBody2Comp;
   float minOfMax = maxBody1Comp < maxBody2Comp ? maxBody1Comp : maxBody2Comp;
-  if (maxOfMin > minOfMax)
-  {
+  if (maxOfMin > minOfMax) {
     return -1;
   }
   return minOfMax - maxOfMin;
 }
 
-static float f_CheckSphereConvexOverlap(const PhysicsBody *sphere, const PhysicsBody *convex, Vector3 axis){
+static float f_CheckSphereConvexOverlap(const PhysicsBody *sphere, const PhysicsBody *convex, Vector3 axis) {
   // Make the axis point from sphere to convex
-  if (Vector3DotProduct(Vector3Subtract(convex->position, sphere->position), axis) < 0){
+  if (Vector3DotProduct(Vector3Subtract(convex->position, sphere->position), axis) < 0) {
     axis = Vector3Negate(axis);
   }
 
   float minBody1Comp = Vector3DotProduct(axis, Vector3Add(sphere->position, Vector3Scale(axis, -sphere->radius)));
   float maxBody1Comp = Vector3DotProduct(axis, Vector3Add(sphere->position, Vector3Scale(axis, sphere->radius)));
-  
+
   float minBody2Comp = 1e30f;
   int32_t minBody2Vertex = 0;
   float maxBody2Comp = -1e30f;
   int32_t maxBody2Vertex = 0;
 
-  for (int i = 0; i < convex->vertexCount; i++)
-  {
+  for (int i = 0; i < convex->vertexCount; i++) {
     Vector3 vertex = Vector3Add(Vector3RotateByQuaternion(convex->vertices[i], convex->rotation), convex->position);
     float comp = Vector3DotProduct(vertex, axis);
-    if (comp < minBody2Comp)
-    {
+    if (comp < minBody2Comp) {
       minBody2Comp = comp;
       minBody2Vertex = i;
     }
-    if (comp > maxBody2Comp)
-    {
+    if (comp > maxBody2Comp) {
       maxBody2Comp = comp;
       maxBody2Vertex = i;
     }
@@ -311,22 +329,18 @@ static float f_CheckSphereConvexOverlap(const PhysicsBody *sphere, const Physics
 
   float maxOfMin = minBody1Comp > minBody2Comp ? minBody1Comp : minBody2Comp;
   float minOfMax = maxBody1Comp < maxBody2Comp ? maxBody1Comp : maxBody2Comp;
-  if (maxOfMin > minOfMax)
-  {
+  if (maxOfMin > minOfMax) {
     return -1;
   }
   return minOfMax - maxOfMin;
 }
 
-Vector3 GetCenterOfContactPoints(Manifold *manifold)
-{
+Vector3 GetCenterOfContactPoints(Manifold *manifold) {
   Vector3 res = {0};
-  for (int32_t i = 0; i < manifold->contactPointCount; i++)
-  {
+  for (int32_t i = 0; i < manifold->contactPointCount; i++) {
     res = Vector3Add(res, manifold->contactPoints[i]);
   }
-  if (manifold->contactPointCount > 0)
-  {
+  if (manifold->contactPointCount > 0) {
     return Vector3Scale(res, 1.0f / manifold->contactPointCount);
   }
   return res;
@@ -372,7 +386,7 @@ PhysicsBody LoadPhysicsBodyFromConvexMesh(Mesh mesh) {
   // Load face normals and edges at the same time
   Triangle *triangles = MemAlloc(mesh.triangleCount * sizeof(Triangle));
   int32_t triangleCount = 0;
-  
+
   physicsBody.faces = MemAlloc(2 * mesh.triangleCount * sizeof(int32_t));
   physicsBody.faceNormals = MemAlloc(mesh.triangleCount * sizeof(Vector3));
   physicsBody.edges = MemAlloc(2 * 3 * mesh.triangleCount * sizeof(int32_t));
@@ -432,7 +446,7 @@ PhysicsBody LoadPhysicsBodyFromConvexMesh(Mesh mesh) {
     bool dupEdge[3] = {false}, dupDir[3] = {false};
 
     // Check for duplicate edges and directions
-    
+
     for (int32_t j = 0; j < physicsBody.edgeCount; j++) {
       for (int32_t e = 0; e < 3; e++) {
         int32_t idx1 = vIndices[e], idx2 = vIndices[(e + 1) % 3];
@@ -485,43 +499,37 @@ PhysicsBody LoadPhysicsBodyFromConvexMesh(Mesh mesh) {
 
   // We can clean up the inner edge between two contigious and co-planar triangles like this:
   //     .----.
-  //    / \  / 
-  //   /___\/  
+  //    / \  /
+  //   /___\/
   // We can also reduce faces by this method
   // I used some kind of external module here for my own convenience
-  for (int32_t i = 0; i < triangleCount; i++)
-  {
-    Triangle* coplanarTriangles = MemAlloc(triangleCount * sizeof(Triangle));
+  for (int32_t i = 0; i < triangleCount; i++) {
+    Triangle *coplanarTriangles = MemAlloc(triangleCount * sizeof(Triangle));
     int32_t coplanarTriangleCount = 1;
     coplanarTriangles[0] = triangles[i];
 
     Vector3 currentRefNormal = GetTriangleNormal(triangles[i]);
     float d = -Vector3DotProduct(triangles[i].p1, currentRefNormal);
-    for (int32_t j = 0; j < triangleCount; j++){
+    for (int32_t j = 0; j < triangleCount; j++) {
       if (i == j) continue;
-      if (fabsf(Vector3DotProduct(triangles[j].p1, currentRefNormal) + d) < 1e-2f
-        && fabsf(Vector3DotProduct(triangles[j].p2, currentRefNormal) + d) < 1e-2f
-        && fabsf(Vector3DotProduct(triangles[j].p3, currentRefNormal) + d) < 1e-2f){
+      if (fabsf(Vector3DotProduct(triangles[j].p1, currentRefNormal) + d) < 1e-2f && fabsf(Vector3DotProduct(triangles[j].p2, currentRefNormal) + d) < 1e-2f && fabsf(Vector3DotProduct(triangles[j].p3, currentRefNormal) + d) < 1e-2f) {
         coplanarTriangles[coplanarTriangleCount++] = triangles[j];
       }
     }
 
-    
-    Edge* horizon = MemAlloc(3 * triangleCount * sizeof(Edge));
+    Edge *horizon = MemAlloc(3 * triangleCount * sizeof(Edge));
     int32_t horizonCount = 0;
-    for (int32_t j = 0; j < coplanarTriangleCount; j++)
-    {
+    for (int32_t j = 0; j < coplanarTriangleCount; j++) {
       Edge edges[3] = {
-        (Edge) {coplanarTriangles[j].p1, coplanarTriangles[j].p2},
-        (Edge) {coplanarTriangles[j].p2, coplanarTriangles[j].p3},
-        (Edge) {coplanarTriangles[j].p3, coplanarTriangles[j].p1}
-      };
-      for (int32_t l = 0; l < 3; l++){
+          (Edge){coplanarTriangles[j].p1, coplanarTriangles[j].p2},
+          (Edge){coplanarTriangles[j].p2, coplanarTriangles[j].p3},
+          (Edge){coplanarTriangles[j].p3, coplanarTriangles[j].p1}};
+      for (int32_t l = 0; l < 3; l++) {
         Edge e = edges[l];
-        for (int32_t m = 0; m < horizonCount; m++){
+        for (int32_t m = 0; m < horizonCount; m++) {
           Edge horizonEdge = horizon[m];
-          if (CompareEdges(horizonEdge, e)){
-            horizon[m] = horizon[horizonCount-1];
+          if (CompareEdges(horizonEdge, e)) {
+            horizon[m] = horizon[horizonCount - 1];
             horizonCount--;
             f_RemoveEdge(e, &physicsBody);
           }
@@ -529,14 +537,14 @@ PhysicsBody LoadPhysicsBodyFromConvexMesh(Mesh mesh) {
         horizon[horizonCount++] = e;
       }
     }
-    
+
     // Remove coplanar triangles/faces
-    for (int32_t j = 1; j < coplanarTriangleCount; j++){
+    for (int32_t j = 1; j < coplanarTriangleCount; j++) {
       int32_t removedIdx = f_RemoveTriangle(&physicsBody, coplanarTriangles[j]);
-      triangles[removedIdx] = triangles[triangleCount-1];
+      triangles[removedIdx] = triangles[triangleCount - 1];
       triangleCount--;
     }
-    
+
     MemFree(coplanarTriangles);
     MemFree(horizon);
   }
@@ -545,7 +553,7 @@ PhysicsBody LoadPhysicsBodyFromConvexMesh(Mesh mesh) {
   // Must set this, or all 4 component will be zeroes
   physicsBody.rotation = QuaternionIdentity();
   physicsBody.mass = 1.0f;
-  physicsBody.inertia = 0.05f;
+  physicsBody.inertia = 0.1f;
   physicsBody.colliderType = COLLIDER_TYPE_RIGID;
   physicsBody.colliderShape = COLLIDER_SHAPE_CONVEX;
 
@@ -559,20 +567,18 @@ PhysicsBody LoadPhysicsBodySphere(float radius) {
   physicsBody.colliderShape = COLLIDER_SHAPE_SPHERE;
 
   physicsBody.radius = radius;
-  physicsBody.boundingBox = (BoundingBox) {
-    .min = {-radius, -radius, -radius},
-    .max = {radius, radius, radius}
-  };
+  physicsBody.boundingBox = (BoundingBox){
+      .min = {-radius, -radius, -radius},
+      .max = {radius, radius, radius}};
   // Must set this, or all 4 component will be zeroesc
   physicsBody.rotation = QuaternionIdentity();
   physicsBody.mass = 1.0f;
-  physicsBody.inertia = 0.05f;
+  physicsBody.inertia = 2.0f / 5.0f * physicsBody.mass * physicsBody.radius * physicsBody.radius;
 
   return physicsBody;
 }
 
-void UnloadPhysicsBody(PhysicsBody physicsBody)
-{
+void UnloadPhysicsBody(PhysicsBody physicsBody) {
   MemFree(physicsBody.vertices);
   MemFree(physicsBody.faceNormals);
   MemFree(physicsBody.edgeDirections);
@@ -581,6 +587,10 @@ void UnloadPhysicsBody(PhysicsBody physicsBody)
 }
 
 Manifold CheckCollisionPhysicsBodies(const PhysicsBody *body1, const PhysicsBody *body2) {
+  if (body1->colliderType == COLLIDER_TYPE_STATIC && body2->colliderType == COLLIDER_TYPE_STATIC) {
+    return (Manifold){0};
+  }
+
   Manifold manifold = {0};
   if (!CheckCollisionBoxes(PhysicsBodyGetWorldBoundingBox(body1), PhysicsBodyGetWorldBoundingBox(body2))) {
     return manifold;
@@ -603,11 +613,11 @@ Manifold CheckCollisionPhysicsBodies(const PhysicsBody *body1, const PhysicsBody
   // If a sphere collides with a convex shape
   // we only need to check the axes that come
   // from the convex shape's normals and edges
-  if (body1->colliderShape == COLLIDER_SHAPE_SPHERE || body2->colliderShape == COLLIDER_SHAPE_SPHERE){
-    const PhysicsBody* sphere;
-    const PhysicsBody* convex;
+  if (body1->colliderShape == COLLIDER_SHAPE_SPHERE || body2->colliderShape == COLLIDER_SHAPE_SPHERE) {
+    const PhysicsBody *sphere;
+    const PhysicsBody *convex;
 
-    if (body1->colliderShape == COLLIDER_SHAPE_SPHERE){
+    if (body1->colliderShape == COLLIDER_SHAPE_SPHERE) {
       sphere = body1;
       convex = body2;
     } else {
@@ -630,24 +640,19 @@ Manifold CheckCollisionPhysicsBodies(const PhysicsBody *body1, const PhysicsBody
       if (depth < minOverlapDepth) {
         minOverlapDepth = depth;
         minOverlapAxis = axis;
-        if (sphere == body1){
+        if (sphere == body1) {
           colType = COLLISION_TYPE_SPHERE_TO_FACE;
         } else {
           colType = COLLISION_TYPE_FACE_TO_SPHERE;
         }
       }
     }
-    
+
     // Axes from convex's edges
     Vector3 nearestEdgeAxis = {0};
     Vector3 overlapPoint = {0};
 
     f_NearestEdgeAxis(sphere, convex, &nearestEdgeAxis, &overlapPoint);
-    
-    // F1 debug
-    if (IsKeyPressed(KEY_F1)){
-      TraceLog(LOG_INFO, "debug");
-    }
 
     manifold.nearestEdgeAxis = nearestEdgeAxis;
     manifold.nearestEdgeOverlap = overlapPoint;
@@ -658,10 +663,10 @@ Manifold CheckCollisionPhysicsBodies(const PhysicsBody *body1, const PhysicsBody
       manifold.seperationAxis = nearestEdgeAxis;
       return manifold;
     }
-    if (edgeDepth < minOverlapDepth){
+    if (edgeDepth < minOverlapDepth) {
       minOverlapDepth = edgeDepth;
       minOverlapAxis = nearestEdgeAxis;
-      if (sphere == body1){
+      if (sphere == body1) {
         colType = COLLISION_TYPE_SPHERE_TO_EDGE;
       } else {
         colType = COLLISION_TYPE_EDGE_TO_SPHERE;
@@ -671,11 +676,11 @@ Manifold CheckCollisionPhysicsBodies(const PhysicsBody *body1, const PhysicsBody
       manifold.contactNormals[0] = nearestEdgeAxis;
       manifold.contactPoints[0] = overlapPoint;
     }
-    
+
     manifold.overlapping = true;
     manifold.seperationAxis = minOverlapAxis;
     manifold.depth = minOverlapDepth;
-    manifold.collisionType = colType;    
+    manifold.collisionType = colType;
     return manifold;
   }
 
@@ -743,48 +748,38 @@ Manifold CheckCollisionPhysicsBodies(const PhysicsBody *body1, const PhysicsBody
   return manifold;
 }
 
-void DrawFaceNormals(PhysicsBody physicsBody)
-{
-  for (int32_t i = 0; i < physicsBody.faceNormalCount; i++)
-  {
+void PhysicsBodyApplyGravity(PhysicsBody *physicsBody, float delta) {
+  if (physicsBody->colliderType == COLLIDER_TYPE_STATIC){
+    return;
+  }
+  delta *= physicsTimeScale;
+  physicsBody->velocity.y -= GRAVITY * delta;
+}
+
+void DrawFaceNormals(PhysicsBody physicsBody) {
+  for (int32_t i = 0; i < physicsBody.faceNormalCount; i++) {
     Vector3 normal = Vector3RotateByQuaternion(physicsBody.faceNormals[i], physicsBody.rotation);
     Vector3 drawPos = physicsBody.position;
-    //Draw axis
+    // Draw axis
     DrawLine3D(Vector3Add(Vector3Scale(Vector3Negate(normal), 1000.0f), drawPos), Vector3Add(Vector3Scale(normal, 1000.0f), drawPos), BLUE);
   }
 }
 
-void DrawFaceNormalCoords(PhysicsBody physicsBody, Camera camera)
-{
+void DrawFaceNormalCoords(PhysicsBody physicsBody, Camera camera) {
   Vector3 camForward = GetCameraForward(&camera);
-  for (int i = 0; i < physicsBody.faceNormalCount; i++)
-  {
+  for (int i = 0; i < physicsBody.faceNormalCount; i++) {
     Vector3 drawPos = Vector3Add(physicsBody.position, Vector3Scale(physicsBody.faceNormals[i], 2.0f));
-    if (Vector3DotProduct(camForward, Vector3Subtract(drawPos, camera.position)) > 0)
-    {
+    if (Vector3DotProduct(camForward, Vector3Subtract(drawPos, camera.position)) > 0) {
       Vector2 screenPos = GetWorldToScreen(drawPos, camera);
       DrawText(TextFormat("(%.1f, %.1f, %.1f)", physicsBody.faceNormals[i].x, physicsBody.faceNormals[i].y, physicsBody.faceNormals[i].z), (int)screenPos.x + 10, (int)screenPos.y - 4, 4, BLACK);
     }
   }
 }
 
-void DrawPhysicsVertexIndices(PhysicsBody physicsBody, Camera camera)
-{
-  Vector3 camForward = GetCameraForward(&camera);
-  for (int32_t i = 0; i < physicsBody.vertexCount; i++)
-  {
-    Vector3 drawPos = Vector3Add(physicsBody.position, physicsBody.vertices[i]);
-    Vector2 screenPos = GetWorldToScreen(drawPos, camera);
-    DrawText(TextFormat("%d", i), (int)screenPos.x + 10, (int)screenPos.y - 4, 8, BLACK);
-  }
-}
-
-void PhysicsBodyUpdate(PhysicsBody *physicsBody, float delta)
-{
+void PhysicsBodyUpdate(PhysicsBody *physicsBody, float delta) {
   delta *= physicsTimeScale;
 
-  if (physicsBody->colliderType == COLLIDER_TYPE_STATIC)
-  {
+  if (physicsBody->colliderType == COLLIDER_TYPE_STATIC) {
     physicsBody->angularVelocity = (Vector3){0};
     physicsBody->velocity = (Vector3){0};
     return;
@@ -792,38 +787,38 @@ void PhysicsBodyUpdate(PhysicsBody *physicsBody, float delta)
 
   // Note to self: Don't ever use Vector3Equals() for stopping threshold, e.g Vector3Equals(linearMovement, Vector3Zero())
   // It has a very small epsilon which is more suitable for removing vertex duplicates
-  float epsilon = 0.0001f;
+  float angularEpsilon = 1e-3f;
 
-  float angularDamping = 2.0f;
+  float angularDamping = 0.5f;
   physicsBody->angularVelocity = Vector3Scale(physicsBody->angularVelocity, Clamp(1 - angularDamping * delta, 0, 1));
-
+  
   Vector3 angularMovement = Vector3Scale(physicsBody->angularVelocity, delta);
-  if (Vector3LengthSqr(angularMovement) > epsilon * epsilon)
-  {
+  if (Vector3LengthSqr(angularMovement) > angularEpsilon * angularEpsilon) {
     physicsBody->rotation = QuaternionMultiply(QuaternionFromEuler(angularMovement.x, angularMovement.y, angularMovement.z), physicsBody->rotation);
   }
+  
+  float linearHorizontalEpsilon = 1e-3f;
 
   float linearDamping = 1.0f;
-  float vy = physicsBody->velocity.y - GRAVITY * delta;
+  //float vy = physicsBody->velocity.y;
   physicsBody->velocity = Vector3Scale(physicsBody->velocity, Clamp(1 - linearDamping * delta, 0, 1));
-  physicsBody->velocity.y = vy;
+  //physicsBody->velocity.y = vy;
 
   Vector3 linearMovement = Vector3Scale(physicsBody->velocity, delta);
-  if (Vector3LengthSqr(linearMovement) > epsilon * epsilon)
-  {
-    physicsBody->position = Vector3Add(physicsBody->position, linearMovement);
+  Vector3 linearHorizontalMovement = (Vector3){linearMovement.x, 0, linearMovement.z};
+  if (Vector3LengthSqr(linearHorizontalMovement) > linearHorizontalEpsilon * linearHorizontalEpsilon) {
+    physicsBody->position = Vector3Add(physicsBody->position, linearHorizontalMovement);
   }
+  physicsBody->position.y += linearMovement.y;
+
 }
 
-void PhysicsBodyAddImpulse(PhysicsBody *physicsBody, float delta, Vector3 impulse)
-{
+void PhysicsBodyAddImpulse(PhysicsBody *physicsBody, float delta, Vector3 impulse) {
   physicsBody->velocity = Vector3Add(physicsBody->velocity, impulse);
 }
 
-void ResolveCollisionPhysicsBodies(PhysicsBody *body1, PhysicsBody *body2, Manifold *manifold, float delta)
-{
-  if (!manifold->overlapping)
-  {
+void ResolveCollisionPhysicsBodies(PhysicsBody *body1, PhysicsBody *body2, Manifold *manifold, float delta) {
+  if (!manifold->overlapping) {
     return;
   }
 
@@ -831,342 +826,322 @@ void ResolveCollisionPhysicsBodies(PhysicsBody *body1, PhysicsBody *body2, Manif
   Vector3 body1ToBody2SepAxis = Vector3DotProduct(Vector3Subtract(body2->position, body1->position), manifold->seperationAxis) < 0 ? Vector3Negate(manifold->seperationAxis) : manifold->seperationAxis;
   // Seperation axis but make it in the direction from body2 -> body1
   Vector3 body2ToBody1SepAxis = Vector3Negate(body1ToBody2SepAxis);
-  float colMargin = 0.0f; // An extra margin to prevent objects from sticking together again
-  
+  float colMargin = 0.0f;  // An extra margin to prevent objects from sticking together again
+
   // Seperating two objects
-  if (body1->colliderType == COLLIDER_TYPE_RIGID && body2->colliderType == COLLIDER_TYPE_RIGID)
-  {
+  if (body1->colliderType == COLLIDER_TYPE_RIGID && body2->colliderType == COLLIDER_TYPE_RIGID) {
     body1->position = Vector3Add(body1->position, Vector3Scale(body2ToBody1SepAxis, manifold->depth * 0.5f + colMargin));
     body2->position = Vector3Add(body2->position, Vector3Scale(body1ToBody2SepAxis, manifold->depth * 0.5f + colMargin));
-  }
-  else if (body1->colliderType == COLLIDER_TYPE_RIGID && body2->colliderType == COLLIDER_TYPE_STATIC)
-  {
+  } else if (body1->colliderType == COLLIDER_TYPE_RIGID && body2->colliderType == COLLIDER_TYPE_STATIC) {
     body1->position = Vector3Add(body1->position, Vector3Scale(body2ToBody1SepAxis, manifold->depth + colMargin));
-  }
-  else
-  {
+  } else {
     body2->position = Vector3Add(body2->position, Vector3Scale(body1ToBody2SepAxis, manifold->depth + colMargin));
   }
+  // For waking up sleeping and floating bodies 
+  // body1->hasContact = true;
+  // body2->hasContact = true;
 
   // Find the contact point
-  switch (manifold->collisionType)
-  {
-  case COLLISION_TYPE_SPHERE_TO_EDGE:{
-    // This type of collision got filled out in the collision detection phase
-    break;
-  }
-  case COLLISION_TYPE_EDGE_TO_SPHERE:{
-    // This type of collision got filled out in the collision detection phase
-    break;
-  }
-  case COLLISION_TYPE_SPHERE_TO_FACE:
-  {
-    Vector3 faceRefPoint = {0};
-    Vector3 faceRefNormal = {0};
-    // Find the face of body2 that is the most aligned with sep axis
-    f_FindMostAlignedFace(body2, body1ToBody2SepAxis, &faceRefPoint, &faceRefNormal);
-    
-    manifold->contactPointCount = 1;
-    manifold->contactPoints[0] = f_ProjectOntoPlane(body1->position, faceRefPoint, faceRefNormal);
-    manifold->contactNormals[0] = faceRefNormal;
-    
-    break;
-  }
-  case COLLISION_TYPE_FACE_TO_SPHERE:{
-    Vector3 faceRefPoint = {0};
-    Vector3 faceRefNormal = {0};
-    // Find the face of body1 that is the most aligned with sep axis
-    f_FindMostAlignedFace(body1, body1ToBody2SepAxis, &faceRefPoint, &faceRefNormal);
-    
-    manifold->contactPointCount = 1;
-    manifold->contactPoints[0] = f_ProjectOntoPlane(body2->position, faceRefPoint, faceRefNormal);
-    manifold->contactNormals[0] = faceRefNormal;
-    
-    break;
-  }
-  case COLLISION_TYPE_FACE_TO_VERTEX:
-  {
-    Vector3 faceRefPoint = {0};
-    Vector3 faceRefNormal = {0};
-    // Find the face of body1 that is the most aligned with sep axis
-    f_FindMostAlignedFace(body1, body1ToBody2SepAxis, &faceRefPoint, &faceRefNormal);
-
-    float *vertexDistances = MemAlloc(body2->vertexCount * sizeof(float));
-
-    float minDistance = 1e30f;
-    for (int32_t i = 0; i < body2->vertexCount; i++)
-    {
-      Vector3 vertex = Vector3Add(Vector3RotateByQuaternion(body2->vertices[i], body2->rotation), body2->position);
-      float distance = fabs(f_DistanceToPlane(vertex, faceRefPoint, faceRefNormal));
-      vertexDistances[i] = distance;
-      if (distance < minDistance)
-      {
-        minDistance = distance;
-      }
+  switch (manifold->collisionType) {
+    case COLLISION_TYPE_SPHERE_TO_EDGE: {
+      // This type of collision got filled out in the collision detection phase
+      break;
     }
-    manifold->contactPointCount = 0;
-    // Add more vertices with approximately the same distance
-    for (int32_t i = 0; i < body2->vertexCount; i++)
-    {
-      if (fabs(vertexDistances[i] - minDistance) <= 0.05f)
-      {
-        Vector3 vertex = Vector3Add(Vector3RotateByQuaternion(body2->vertices[i], body2->rotation), body2->position);
-        manifold->contactPoints[manifold->contactPointCount] = vertex;
-        manifold->contactNormals[manifold->contactPointCount] = faceRefNormal;
-        manifold->contactPointCount++;
-      }
+    case COLLISION_TYPE_EDGE_TO_SPHERE: {
+      // This type of collision got filled out in the collision detection phase
+      break;
     }
+    case COLLISION_TYPE_SPHERE_TO_FACE: {
+      Vector3 faceRefPoint = {0};
+      Vector3 faceRefNormal = {0};
+      // Find the face of body2 that is the most aligned with sep axis
+      f_FindMostAlignedFace(body2, body1ToBody2SepAxis, &faceRefPoint, &faceRefNormal);
 
+      manifold->contactPointCount = 1;
+      manifold->contactPoints[0] = f_ProjectOntoPlane(body1->position, faceRefPoint, faceRefNormal);
+      manifold->contactNormals[0] = faceRefNormal;
 
-    MemFree(vertexDistances);
-    break;
-  }
-  case COLLISION_TYPE_VERTEX_TO_FACE:
-  {
-    Vector3 faceRefPoint = {0};
-    Vector3 faceRefNormal = {0};
-    // Find the face of body2 that is the most aligned with sep axis
-    f_FindMostAlignedFace(body2, body2ToBody1SepAxis, &faceRefPoint, &faceRefNormal);
-
-    float *vertexDistances = MemAlloc(body1->vertexCount * sizeof(float));
-
-    float minDistance = 1e30f;
-    for (int32_t i = 0; i < body1->vertexCount; i++)
-    {
-      Vector3 vertex = Vector3Add(Vector3RotateByQuaternion(body1->vertices[i], body2->rotation), body1->position);
-      float distance = fabs(f_DistanceToPlane(vertex, faceRefPoint, faceRefNormal));
-      vertexDistances[i] = distance;
-      if (distance < minDistance)
-      {
-        minDistance = distance;
-      }
+      break;
     }
+    case COLLISION_TYPE_FACE_TO_SPHERE: {
+      Vector3 faceRefPoint = {0};
+      Vector3 faceRefNormal = {0};
+      // Find the face of body1 that is the most aligned with sep axis
+      f_FindMostAlignedFace(body1, body1ToBody2SepAxis, &faceRefPoint, &faceRefNormal);
 
-    // Add more vertices with approximately the same distance
-    manifold->contactPointCount = 0;
-    for (int32_t i = 0; i < body1->vertexCount; i++)
-    {
-      if (fabs(vertexDistances[i] - minDistance) <= 0.05f)
-      {
-        Vector3 vertex = Vector3Add(Vector3RotateByQuaternion(body1->vertices[i], body2->rotation), body1->position);
-        manifold->contactPoints[manifold->contactPointCount++] = vertex;
-        manifold->contactNormals[manifold->contactPointCount] = faceRefNormal;
-      }
-    }
+      manifold->contactPointCount = 1;
+      manifold->contactPoints[0] = f_ProjectOntoPlane(body2->position, faceRefPoint, faceRefNormal);
+      manifold->contactNormals[0] = faceRefNormal;
 
-    MemFree(vertexDistances);
-    break;
-  }
-  case COLLISION_TYPE_EDGE_TO_EDGE:
-  {
-    // Find the candidates for the colliding edge of body1
-    // Choose from the edges that pendicular to the seperation axis
-    int32_t body1EdgeCandidatesCount = 0;
-    int32_t *body1EdgeCandidates = MemAlloc(2 * body1->edgeCount * sizeof(int32_t));
+      break;
+    }
+    case COLLISION_TYPE_VERTEX_TO_FACE: 
+    case COLLISION_TYPE_FACE_TO_VERTEX: {
+      PhysicsBody* bodyVertex;
+      PhysicsBody* bodyFace;
+      Vector3 bodyFaceToBodyVertexSepAxis;
+      if (manifold->collisionType == COLLISION_TYPE_VERTEX_TO_FACE){
+        bodyVertex = body1;
+        bodyFace = body2;
+        bodyFaceToBodyVertexSepAxis = body1ToBody2SepAxis;
+      } else {
+        bodyVertex = body2;
+        bodyFace = body1;
+        bodyFaceToBodyVertexSepAxis = body2ToBody1SepAxis;
+      }
 
-    for (int32_t i = 0; i < 2 * body1->edgeCount; i += 2)
-    {
-      Vector3 v1 = Vector3RotateByQuaternion(body1->vertices[body1->edges[i]], body1->rotation);
-      Vector3 v2 = Vector3RotateByQuaternion(body1->vertices[body1->edges[i + 1]], body1->rotation);
-      Vector3 edgeDir = Vector3Subtract(v2, v1);
-      if (fabs(Vector3DotProduct(edgeDir, manifold->seperationAxis)) < 0.01f)
-      {
-        body1EdgeCandidates[2 * body1EdgeCandidatesCount] = body1->edges[i];
-        body1EdgeCandidates[2 * body1EdgeCandidatesCount + 1] = body1->edges[i + 1];
-        body1EdgeCandidatesCount++;
-      }
-    }
-    // Find the candidates for the colliding edge of body2
-    // Choose from the edges that pendicular to the seperation axis
-    int32_t body2EdgeCandidatesCount = 0;
-    int32_t *body2EdgeCandidates = MemAlloc(2 * body2->edgeCount * sizeof(int32_t));
-    for (int32_t i = 0; i < 2 * body2->edgeCount; i += 2)
-    {
-      Vector3 v1 = Vector3RotateByQuaternion(body2->vertices[body2->edges[i]], body2->rotation);
-      Vector3 v2 = Vector3RotateByQuaternion(body2->vertices[body2->edges[i + 1]], body2->rotation);
-      Vector3 edgeDir = Vector3Subtract(v2, v1);
-      if (fabs(Vector3DotProduct(edgeDir, manifold->seperationAxis)) < 0.01f)
-      {
-        body2EdgeCandidates[2 * body2EdgeCandidatesCount] = body2->edges[i];
-        body2EdgeCandidates[2 * body2EdgeCandidatesCount + 1] = body2->edges[i + 1];
-        body2EdgeCandidatesCount++;
-      }
-    }
-    // Find the closest edge pair
-    float minDistanceSqr = 1e30f;
-    Vector3 intersection = {0};
-    Vector3 normal = {0};
-    for (int32_t i = 0; i < 2 * body1EdgeCandidatesCount; i += 2)
-    {
-      Vector3 v1Start = Vector3Add(Vector3RotateByQuaternion(body1->vertices[body1EdgeCandidates[i]], body1->rotation), body1->position);
-      Vector3 v1End = Vector3Add(Vector3RotateByQuaternion(body1->vertices[body1EdgeCandidates[i + 1]], body1->rotation), body1->position);
-      for (int32_t j = 0; j < 2 * body2EdgeCandidatesCount; j += 2)
-      {
-        Vector3 v2Start = Vector3Add(Vector3RotateByQuaternion(body2->vertices[body2EdgeCandidates[j]], body2->rotation), body2->position);
-        Vector3 v2End = Vector3Add(Vector3RotateByQuaternion(body2->vertices[body2EdgeCandidates[j + 1]], body2->rotation), body2->position);
-        Vector3 intersectionOnV1 = {0};
-        float distanceSqr = f_LineToLineDistanceSqr(v1Start, v1End, v2Start, v2End, &intersectionOnV1);
-        if (distanceSqr < minDistanceSqr)
-        {
-          minDistanceSqr = distanceSqr;
-          intersection = intersectionOnV1;
-          normal = Vector3CrossProduct(Vector3Subtract(v1End, v1Start), Vector3Subtract(v2End, v2Start));
-          if (Vector3LengthSqr(normal) < 1e-4f)
-          {
-            normal = body2ToBody1SepAxis;
-          }
-          manifold->edge1Start = v1Start;
-          manifold->edge1End = v1End;
-          manifold->edge2Start = v2Start;
-          manifold->edge2End = v2End;
+      Vector3 faceRefPoint = {0};
+      Vector3 faceRefNormal = {0};
+      // Find the face of bodyFace that is the most aligned with sep axis
+      f_FindMostAlignedFace(bodyFace, bodyFaceToBodyVertexSepAxis, &faceRefPoint, &faceRefNormal);
+
+      // Distance from vertcies of bodyVertex to the most aligned face of bodyFace
+      float *vertexDistances = MemAlloc(bodyVertex->vertexCount * sizeof(float));
+
+      float minDistance = 1e30f;
+      for (int32_t i = 0; i < bodyVertex->vertexCount; i++) {
+        Vector3 vertex = Vector3Add(Vector3RotateByQuaternion(bodyVertex->vertices[i], bodyVertex->rotation), bodyVertex->position);
+        float distance = fabs(f_DistanceToPlane(vertex, faceRefPoint, faceRefNormal));
+        vertexDistances[i] = distance;
+        if (distance < minDistance) {
+          minDistance = distance;
         }
       }
+
+      manifold->contactPointCount = 0;
+      // Add more vertices with approximately the same distance
+      for (int32_t i = 0; i < bodyVertex->vertexCount; i++) {
+        if (fabs(vertexDistances[i] - minDistance) <= 0.01f) {
+          Vector3 vertex = Vector3Add(Vector3RotateByQuaternion(bodyVertex->vertices[i], bodyVertex->rotation), bodyVertex->position);
+          manifold->contactPoints[manifold->contactPointCount] = vertex;
+          manifold->contactNormals[manifold->contactPointCount] = faceRefNormal;
+          manifold->contactPointCount++;
+        }
+      }
+      
+      // Filter out vertice that are not overlapping
+      if (manifold->contactPointCount > 1){
+        for (int32_t i = 0; i < manifold->contactPointCount; i++) {
+          bool inside = true;
+          Vector3 contactPoint = manifold->contactPoints[i];
+          for (int32_t j = 0; j < bodyFace->faceCount; j++) {
+            Vector3 normal = bodyFace->faceNormals[abs(bodyFace->faces[2 * j + 1]) - 1];
+            if (bodyFace->faces[2 * j + 1] < 0) {
+              normal = Vector3Negate(normal);
+            }
+            normal = Vector3RotateByQuaternion(normal, bodyFace->rotation);
+            Vector3 point = Vector3Add(bodyFace->position, Vector3RotateByQuaternion(bodyFace->vertices[bodyFace->faces[2 * j]], bodyFace->rotation));
+            float distanceToPlane = f_DistanceToPlane(contactPoint, point, normal);
+            if (distanceToPlane > 0.1f) {
+              inside = false;
+              break;
+            }
+          }
+          if (!inside) {
+            manifold->contactPoints[i] = manifold->contactPoints[manifold->contactPointCount - 1];
+            manifold->contactNormals[i] = manifold->contactNormals[manifold->contactPointCount - 1];
+            manifold->contactPointCount--;
+          }
+        }
+      }
+
+      MemFree(vertexDistances);
+      break;
     }
+    case COLLISION_TYPE_EDGE_TO_EDGE: {
+      // Find the candidates for the colliding edge of body1
+      // Choose from the edges that pendicular to the seperation axis
+      int32_t body1EdgeCandidatesCount = 0;
+      int32_t *body1EdgeCandidates = MemAlloc(2 * body1->edgeCount * sizeof(int32_t));
 
-    // Default direction should be from object 1 to object 2
-    if (Vector3DotProduct(normal, Vector3Subtract(body2->position, body1->position)) < 0){
-      normal = Vector3Negate(normal);
+      for (int32_t i = 0; i < 2 * body1->edgeCount; i += 2) {
+        Vector3 v1 = Vector3RotateByQuaternion(body1->vertices[body1->edges[i]], body1->rotation);
+        Vector3 v2 = Vector3RotateByQuaternion(body1->vertices[body1->edges[i + 1]], body1->rotation);
+        Vector3 edgeDir = Vector3Subtract(v2, v1);
+        if (fabs(Vector3DotProduct(edgeDir, manifold->seperationAxis)) < 0.01f) {
+          body1EdgeCandidates[2 * body1EdgeCandidatesCount] = body1->edges[i];
+          body1EdgeCandidates[2 * body1EdgeCandidatesCount + 1] = body1->edges[i + 1];
+          body1EdgeCandidatesCount++;
+        }
+      }
+      // Find the candidates for the colliding edge of body2
+      // Choose from the edges that pendicular to the seperation axis
+      int32_t body2EdgeCandidatesCount = 0;
+      int32_t *body2EdgeCandidates = MemAlloc(2 * body2->edgeCount * sizeof(int32_t));
+      for (int32_t i = 0; i < 2 * body2->edgeCount; i += 2) {
+        Vector3 v1 = Vector3RotateByQuaternion(body2->vertices[body2->edges[i]], body2->rotation);
+        Vector3 v2 = Vector3RotateByQuaternion(body2->vertices[body2->edges[i + 1]], body2->rotation);
+        Vector3 edgeDir = Vector3Subtract(v2, v1);
+        if (fabs(Vector3DotProduct(edgeDir, manifold->seperationAxis)) < 0.01f) {
+          body2EdgeCandidates[2 * body2EdgeCandidatesCount] = body2->edges[i];
+          body2EdgeCandidates[2 * body2EdgeCandidatesCount + 1] = body2->edges[i + 1];
+          body2EdgeCandidatesCount++;
+        }
+      }
+      // Find the closest edge pair
+      float minDistanceSqr = 1e30f;
+      Vector3 intersection = {0};
+      Vector3 normal = {0};
+      for (int32_t i = 0; i < 2 * body1EdgeCandidatesCount; i += 2) {
+        Vector3 v1Start = Vector3Add(Vector3RotateByQuaternion(body1->vertices[body1EdgeCandidates[i]], body1->rotation), body1->position);
+        Vector3 v1End = Vector3Add(Vector3RotateByQuaternion(body1->vertices[body1EdgeCandidates[i + 1]], body1->rotation), body1->position);
+        for (int32_t j = 0; j < 2 * body2EdgeCandidatesCount; j += 2) {
+          Vector3 v2Start = Vector3Add(Vector3RotateByQuaternion(body2->vertices[body2EdgeCandidates[j]], body2->rotation), body2->position);
+          Vector3 v2End = Vector3Add(Vector3RotateByQuaternion(body2->vertices[body2EdgeCandidates[j + 1]], body2->rotation), body2->position);
+          Vector3 intersectionOnV1 = {0};
+          float distanceSqr = f_LineToLineDistanceSqr(v1Start, v1End, v2Start, v2End, &intersectionOnV1);
+          if (distanceSqr < minDistanceSqr) {
+            minDistanceSqr = distanceSqr;
+            intersection = intersectionOnV1;
+            normal = Vector3CrossProduct(Vector3Subtract(v1End, v1Start), Vector3Subtract(v2End, v2Start));
+            if (Vector3LengthSqr(normal) < 1e-4f) {
+              normal = body2ToBody1SepAxis;
+            }
+            manifold->edge1Start = v1Start;
+            manifold->edge1End = v1End;
+            manifold->edge2Start = v2Start;
+            manifold->edge2End = v2End;
+          }
+        }
+      }
+
+      // Default direction should be from object 1 to object 2
+      if (Vector3DotProduct(normal, Vector3Subtract(body2->position, body1->position)) < 0) {
+        normal = Vector3Negate(normal);
+      }
+
+      MemFree(body1EdgeCandidates);
+      MemFree(body2EdgeCandidates);
+
+      manifold->contactPointCount = 1;
+      manifold->contactPoints[0] = intersection;
+      manifold->contactNormals[0] = Vector3Normalize(normal);
     }
-
-    MemFree(body1EdgeCandidates);
-    MemFree(body2EdgeCandidates);
-
-    manifold->contactPointCount = 1;
-    manifold->contactPoints[0] = intersection;
-    manifold->contactNormals[0] = Vector3Normalize(normal);
-  }
-  default:
-    break;
+    default:
+      break;
   }
 
-  if (physicsTimeScale  < 1e-4f){
+  if (physicsTimeScale < 1e-4f) {
     return;
   }
-  
+
   delta *= physicsTimeScale;
   // Calculate the impulse base on the velocity of center of mass and the angular velocity of each object
-  // e : bounciness 
-  float e = 0.1f;
+  // e : bounciness
+  float e = 0.5f;
   Vector3 totalImpulse = {0};
   // Vectors from center of masses to contact point
-  for (int32_t i = 0; i < manifold->contactPointCount; i++)
-  {
-    Vector3 p = manifold->contactPoints[i]; 
+  for (int32_t i = 0; i < manifold->contactPointCount; i++) {
+    Vector3 p = manifold->contactPoints[i];
     Vector3 n = manifold->contactNormals[i];
     Vector3 r1 = Vector3Subtract(p, body1->position);
     Vector3 r2 = Vector3Subtract(p, body2->position);
     // m_eff : Mass effective, approximated for 2 point masses
     float m_eff = InvMass(body1) + InvMass(body2) + Vector3LengthSqr(Vector3CrossProduct(r1, n)) * InvInertia(body1) + Vector3LengthSqr(Vector3CrossProduct(r2, n)) * InvInertia(body2);
+
     // vR : relative velocity between two point of each of object at the contact point
     Vector3 vR = Vector3Subtract(
-      Vector3Add(body1->velocity, Vector3CrossProduct(body1->angularVelocity, r1)),
-      Vector3Add(body2->velocity, Vector3CrossProduct(body2->angularVelocity, r2))
-    );
+        Vector3Add(body1->velocity, Vector3CrossProduct(body1->angularVelocity, r1)),
+        Vector3Add(body2->velocity, Vector3CrossProduct(body2->angularVelocity, r2)));
     // Normal impulse
-    Vector3 jN = Vector3Scale(n, -(1+e) * Vector3DotProduct(vR, n) / m_eff);
+    float jNMag = -(1 + e) * Vector3DotProduct(vR, n) / m_eff;
+    Vector3 jN = Vector3Scale(n, jNMag);
 
     // Tangential impulse
-    Vector3 vN = Vector3Project(vR, n);
+    Vector3 vN = Vector3Scale(n, Vector3DotProduct(vR, n));
     Vector3 vT = Vector3Subtract(vR, vN);
 
     Vector3 jT = {0};
-    // TODO: Coulomb limit: |jT| < mu.|jN|
-    // where u : friction coeffiecnt, depend on physics materials
-    if (Vector3LengthSqr(vT) >= 1e-8f){
+    
+    if (Vector3LengthSqr(vT) >= 1e-8f) {
       Vector3 t = Vector3Normalize(vT);
       // m_eff : Mass effective for tangential
       float m_effT = InvMass(body1) + InvMass(body2) + Vector3LengthSqr(Vector3CrossProduct(r1, t)) * InvInertia(body1) + Vector3LengthSqr(Vector3CrossProduct(r2, t)) * InvInertia(body2);
-      jT = Vector3Scale(vT, -1.0f / m_effT);
+      float jTMag = -Vector3DotProduct(vR, t) / m_effT;
+      // Coulomb limit: |jT| < mu.|jN|
+      // where u : friction coeffiecnt, depend on physics materials
+      jT = Vector3Scale(t, jTMag);
+      float mu = 0.5f; // Friction coefficient
+      float jTMax = mu * jNMag * (jTMag >= 0 ? 1 : -1);
+      if (fabsf(jTMag) > fabsf(jTMax)) {
+        jT = Vector3Scale(t, jTMax);
+      }
     }
 
-    totalImpulse = Vector3Add(totalImpulse, Vector3Add(jN, jT));
+    // Apply torques
+    // On body1
+    Vector3 f1 = Vector3Add(jN, jT);
+    Vector3 torque1 = Vector3CrossProduct(r1, f1);
+    Vector3 angAccelDelta1 = Vector3Scale(torque1, InvInertia(body1) * delta);
+    body1->angularVelocity = Vector3Add(body1->angularVelocity, angAccelDelta1);
+
+    // On body2
+    Vector3 f2 = Vector3Negate(Vector3Add(jN, jT));
+    Vector3 torque2 = Vector3CrossProduct(r2, f2);
+    Vector3 angAccelDelta2 = Vector3Scale(torque2, InvInertia(body2) * delta);
+    body2->angularVelocity = Vector3Add(body2->angularVelocity, angAccelDelta2);
+    
+    totalImpulse = Vector3Add(totalImpulse, Vector3Scale(f1, 1.0f / manifold->contactPointCount));
   }
-  totalImpulse = Vector3Scale(totalImpulse, 1.0f / (float)manifold->contactPointCount);
-  
-  body1->velocity = Vector3Add(body1->velocity, Vector3Scale(totalImpulse, InvMass(body1)));
-  body2->velocity = Vector3Add(body2->velocity, Vector3Scale(totalImpulse, -InvMass(body2)));
 
-  Vector3 contactPointCenter = GetCenterOfContactPoints(manifold);
+  Vector3 vDelta1 = Vector3Scale(totalImpulse, InvMass(body1));
+  Vector3 vDelta2 = Vector3Scale(totalImpulse, -InvMass(body2));
+  body1->velocity = Vector3Add(body1->velocity, vDelta1);
+  body2->velocity = Vector3Add(body2->velocity, vDelta2);
 
-  // Apply torques
-  // On body1
-  Vector3 r1 = Vector3Subtract(contactPointCenter, body1->position); 
-  Vector3 f1 = totalImpulse;
-  Vector3 torque1 = Vector3CrossProduct(r1, f1);
-  Vector3 angAccelDelta = Vector3Scale(torque1, 1.0f / body1->inertia * delta);
-  body1->angularVelocity = Vector3Add(body1->angularVelocity, angAccelDelta);
-
-  // On body2
-  Vector3 r2 = Vector3Subtract(contactPointCenter, body2->position);
-  Vector3 f2 = Vector3Negate(totalImpulse);
-  Vector3 torque2 = Vector3CrossProduct(r2, f2);
-  Vector3 angAccelDelta2 = Vector3Scale(torque2, 1.0f / body2->inertia * delta);
-  body2->angularVelocity = Vector3Add(body2->angularVelocity, angAccelDelta2);
 }
 
-void WakeUp(PhysicsBody *physicsBody)
-{
-  // physicsBody->sleepingTimer = 0.0f;
+void WakeUp(PhysicsBody *physicsBody) {
+  // physicsBody->sleepTimer = 0.0f;
   // physicsBody->isSleeping = false;
 }
 
-void ManifoldToString(Manifold *manifold, char *buffer)
-{
+void ManifoldToString(Manifold *manifold, char *buffer) {
   char colType[100] = "null";
-  if (manifold->overlapping)
-  {
-    switch (manifold->collisionType)
-    {
-    case COLLISION_TYPE_SPHERE_TO_EDGE:
-    {
-      TextCopy(colType, "sphere-to-edge");
-      break;
-    }
-    case COLLISION_TYPE_EDGE_TO_SPHERE:
-    {
-      TextCopy(colType, "edge-to-sphere");
-      break;
-    }
-    case COLLISION_TYPE_SPHERE_TO_FACE:
-    {
-      TextCopy(colType, "sphere-to-face");
-      break;
-    }
-    case COLLISION_TYPE_FACE_TO_SPHERE:
-    {
-      TextCopy(colType, "face-to-sphere");
-      break;
-    }
-    case COLLISION_TYPE_EDGE_TO_EDGE:
-    {
-      TextCopy(colType, "edge-to-edge");
-      break;
-    }
-    case COLLISION_TYPE_FACE_TO_VERTEX:
-    {
-      TextCopy(colType, "face-to-vertex");
-      break;
-    }
-    case COLLISION_TYPE_VERTEX_TO_FACE:
-    {
-      TextCopy(colType, "vertex-to-face");
-      break;
-    }
-    default:
-      break;
+  if (manifold->overlapping) {
+    switch (manifold->collisionType) {
+      case COLLISION_TYPE_SPHERE_TO_EDGE: {
+        TextCopy(colType, "sphere-to-edge");
+        break;
+      }
+      case COLLISION_TYPE_EDGE_TO_SPHERE: {
+        TextCopy(colType, "edge-to-sphere");
+        break;
+      }
+      case COLLISION_TYPE_SPHERE_TO_FACE: {
+        TextCopy(colType, "sphere-to-face");
+        break;
+      }
+      case COLLISION_TYPE_FACE_TO_SPHERE: {
+        TextCopy(colType, "face-to-sphere");
+        break;
+      }
+      case COLLISION_TYPE_EDGE_TO_EDGE: {
+        TextCopy(colType, "edge-to-edge");
+        break;
+      }
+      case COLLISION_TYPE_FACE_TO_VERTEX: {
+        TextCopy(colType, "face-to-vertex");
+        break;
+      }
+      case COLLISION_TYPE_VERTEX_TO_FACE: {
+        TextCopy(colType, "vertex-to-face");
+        break;
+      }
+      default:
+        break;
     }
   }
-  
+
   sprintf(buffer, "Collision: %s\ncontacts: %d", colType, manifold->contactPointCount);
 }
 
-BoundingBox PhysicsBodyGetWorldBoundingBox(PhysicsBody *physicsBody)
-{
+BoundingBox PhysicsBodyGetWorldBoundingBox(PhysicsBody *physicsBody) {
   // For spheres, there is no need to rotate the bounding box
-  if (physicsBody->colliderShape == COLLIDER_SHAPE_SPHERE){
+  if (physicsBody->colliderShape == COLLIDER_SHAPE_SPHERE) {
     return (BoundingBox){
-      .min = Vector3Add(physicsBody->position, physicsBody->boundingBox.min),
-      .max = Vector3Add(physicsBody->position, physicsBody->boundingBox.max),
+        .min = Vector3Add(physicsBody->position, physicsBody->boundingBox.min),
+        .max = Vector3Add(physicsBody->position, physicsBody->boundingBox.max),
     };
   }
 
@@ -1182,8 +1157,7 @@ BoundingBox PhysicsBodyGetWorldBoundingBox(PhysicsBody *physicsBody)
       (Vector3){bb.max.x, bb.max.y, bb.min.z}};
   Vector3 newMin = (Vector3){1e30f, 1e30f, 1e30f};
   Vector3 newMax = (Vector3){-1e30f, -1e30f, -1e30f};
-  for (int32_t i = 0; i < 8; i++)
-  {
+  for (int32_t i = 0; i < 8; i++) {
     points[i] = Vector3RotateByQuaternion(points[i], physicsBody->rotation);
     if (newMin.x > points[i].x)
       newMin.x = points[i].x;
@@ -1203,8 +1177,7 @@ BoundingBox PhysicsBodyGetWorldBoundingBox(PhysicsBody *physicsBody)
   return (BoundingBox){newMin, newMax};
 }
 
-BoundingBox PhysicsBodyGetWorldBoundingBoxMargin(PhysicsBody *physicsBody, float margin)
-{
+BoundingBox PhysicsBodyGetWorldBoundingBoxMargin(PhysicsBody *physicsBody, float margin) {
   BoundingBox bb = PhysicsBodyGetWorldBoundingBox(physicsBody);
   bb.min = Vector3Subtract(bb.min, (Vector3){margin, margin, margin});
   bb.max = Vector3Add(bb.max, (Vector3){margin, margin, margin});
@@ -1212,46 +1185,51 @@ BoundingBox PhysicsBodyGetWorldBoundingBoxMargin(PhysicsBody *physicsBody, float
 }
 
 float InvInertia(PhysicsBody *physicsBody) {
-  if (physicsBody->colliderType == COLLIDER_TYPE_STATIC){
+  if (physicsBody->colliderType == COLLIDER_TYPE_STATIC) {
+    return 0.0f;
+  }
+  return 1.0f / physicsBody->inertia;
+}
+
+float InvMass(PhysicsBody *physicsBody) {
+  if (physicsBody->colliderType == COLLIDER_TYPE_STATIC) {
     return 0.0f;
   }
   return 1.0f / physicsBody->mass;
 }
 
-float InvMass(PhysicsBody *physicsBody){
-  if (physicsBody->colliderType == COLLIDER_TYPE_STATIC){
-    return 0.0f;
-  }
-  return physicsBody->inertia;
-}
-
-float PhysicsBodyToString(const PhysicsBody* physicsBody, char *buffer) {
+float PhysicsBodyToString(const PhysicsBody *physicsBody, char *buffer) {
   sprintf(buffer, "Body Name:%s\nv:(%.2f, %.2f, %.2f)\nav:(%.2f, %.2f, %.2f)", physicsBody->bodyName,
-    physicsBody->velocity.x, physicsBody->velocity.y, physicsBody->velocity.z,
-    physicsBody->angularVelocity.x, physicsBody->angularVelocity.y, physicsBody->angularVelocity.z);
+          physicsBody->velocity.x, physicsBody->velocity.y, physicsBody->velocity.z,
+          physicsBody->angularVelocity.x, physicsBody->angularVelocity.y, physicsBody->angularVelocity.z);
 }
 
 void DrawPhysicsBodyEdges(PhysicsBody *physicsBody) {
-  if (physicsBody->colliderShape != COLLIDER_SHAPE_CONVEX){
+  if (physicsBody->colliderShape != COLLIDER_SHAPE_CONVEX) {
     return;
   }
-  for (int32_t i = 0; i < 2*physicsBody->edgeCount; i+=2)
-  {
+  for (int32_t i = 0; i < 2 * physicsBody->edgeCount; i += 2) {
     Vector3 v1 = Vector3Add(physicsBody->position, Vector3RotateByQuaternion(physicsBody->vertices[physicsBody->edges[i]], physicsBody->rotation));
-    Vector3 v2 = Vector3Add(physicsBody->position, Vector3RotateByQuaternion(physicsBody->vertices[physicsBody->edges[i+1]], physicsBody->rotation));
+    Vector3 v2 = Vector3Add(physicsBody->position, Vector3RotateByQuaternion(physicsBody->vertices[physicsBody->edges[i + 1]], physicsBody->rotation));
     DrawLine3D(v1, v2, PURPLE);
   }
 }
 
 void DrawPhysicsBodyVertexIndices(const PhysicsBody *physicsBody, Camera camera) {
   Vector3 camForward = GetCameraForward(&camera);
-  for (int i = 0; i < physicsBody->vertexCount; i++)
-  { 
+  for (int i = 0; i < physicsBody->vertexCount; i++) {
     Vector3 drawPos = Vector3Add(physicsBody->position, Vector3RotateByQuaternion(physicsBody->vertices[i], physicsBody->rotation));
-    if (Vector3DotProduct(camForward, Vector3Subtract(drawPos, camera.position)) > 0)
-    {
+    if (Vector3DotProduct(camForward, Vector3Subtract(drawPos, camera.position)) > 0) {
       Vector2 screenPos = GetWorldToScreen(drawPos, camera);
       DrawText(TextFormat("%d", i), (int)screenPos.x + 10, (int)screenPos.y - 4, 8, BLUE);
     }
+  }
+}
+
+void DrawPhysicsBodyVertices(const PhysicsBody *physicsBody) {
+  for (int32_t i = 0; i < physicsBody->vertexCount; i++)
+  {
+    Vector3 drawPos = Vector3Add(physicsBody->position, Vector3RotateByQuaternion(physicsBody->vertices[i], physicsBody->rotation));
+    DrawSphere(drawPos, 0.1f, DARKBLUE);
   }
 }

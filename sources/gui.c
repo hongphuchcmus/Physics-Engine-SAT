@@ -12,39 +12,23 @@ UIState GuiInit()
   uiState.fontCount = 4;
   uiState.fonts = MEM_NEW(&uiState.memArena, Font, uiState.fontCount);
   
-  uiState.cubePositionEditMode = MEM_NEW(&uiState.memArena, bool, 1);
-  uiState.cubePositionEditSubmitted = MEM_NEW(&uiState.memArena, bool, 1);
-  uiState.cubePositionEditText = MEM_NEW(&uiState.memArena, char, 100);
-  
-  uiState.dodecaPositionEditMode = MEM_NEW(&uiState.memArena, bool, 1);
-  uiState.dodecaPositionEditSubmitted = MEM_NEW(&uiState.memArena, bool, 1);
-  uiState.dodecaPositionEditText = MEM_NEW(&uiState.memArena, char, 100);
-
-  uiState.cubeRotationEditText = MEM_NEW(&uiState.memArena, char, 100);
-  uiState.cubeRotationEditMode = MEM_NEW(&uiState.memArena, bool, 1);
-  uiState.cubeRotationEditSubmitted = MEM_NEW(&uiState.memArena, bool, 1);
-
-  uiState.manifoldText = MEM_NEW(&uiState.memArena, char, 256);
-
-  uiState.dodecaRotationEditText = MEM_NEW(&uiState.memArena, char, 100);
-  uiState.dodecaRotationEditMode = MEM_NEW(&uiState.memArena, bool, 1);
-  uiState.dodecaRotationEditSubmitted = MEM_NEW(&uiState.memArena, bool, 1);
-  
-  uiState.prevPressed = MEM_NEW(&uiState.memArena, bool, 1);
+  uiState.name = MEM_NEW(&uiState.memArena, char, 100);
+  uiState.position = MEM_NEW(&uiState.memArena, char, 100);
+  uiState.rotation = MEM_NEW(&uiState.memArena, char, 100);
+  uiState.velocity = MEM_NEW(&uiState.memArena, char, 100);
+  uiState.angularVelocity = MEM_NEW(&uiState.memArena, char, 100);
+  uiState.isPaused = MEM_NEW(&uiState.memArena, bool, 1);
   uiState.nextPressed = MEM_NEW(&uiState.memArena, bool, 1);
-  uiState.wireframeEnabled = MEM_NEW(&uiState.memArena, bool, 1);
-  uiState.wireframeCheckToggled = MEM_NEW(&uiState.memArena, bool, 1);
-  uiState.pauseEnabled = MEM_NEW(&uiState.memArena, bool, 1);
-  uiState.pauseToggled = MEM_NEW(&uiState.memArena, bool, 1);
-
-  //uiState.cubePhysicsInfoText = MEM_NEW(&uiState.memArena, char, 256);
-  //uiState.dodecaPhysicsInfoText = MEM_NEW(&uiState.memArena, char, 256);
-  
-  TextCopy(uiState.cubePositionEditText, "1 0 1");
-  TextCopy(uiState.cubeRotationEditText, "20 0 0");
-  TextCopy(uiState.dodecaPositionEditText, "1 4 1"); 
-  TextCopy(uiState.dodecaRotationEditText, "0 0 10");
-  *uiState.pauseEnabled = true;
+  uiState.isFocused = MEM_NEW(&uiState.memArena, bool, 1);
+  uiState.positionEditMode = MEM_NEW(&uiState.memArena, bool, 1);
+  uiState.rotationEditMode = MEM_NEW(&uiState.memArena, bool, 1);
+  uiState.velocityEditMode = MEM_NEW(&uiState.memArena, bool, 1);
+  uiState.angularVelocityEditMode = MEM_NEW(&uiState.memArena, bool, 1);
+  uiState.positionSubmitted = MEM_NEW(&uiState.memArena, bool, 1);
+  uiState.rotationSubmitted = MEM_NEW(&uiState.memArena, bool, 1);
+  uiState.velocitySubmitted = MEM_NEW(&uiState.memArena, bool, 1);
+  uiState.angularVelocitySubmitted = MEM_NEW(&uiState.memArena, bool, 1);
+  uiState.restartPressed = MEM_NEW(&uiState.memArena, bool, 1);
 
   uint64_t clayRequiredMemory = Clay_MinMemorySize();
   Clay_Arena clayMemory = Clay_CreateArenaWithCapacityAndMemory(clayRequiredMemory, malloc(clayRequiredMemory));
@@ -107,13 +91,13 @@ GuiUpdate(UIState* uiState)
       CLAY({
           .layout = {
             .layoutDirection = CLAY_TOP_TO_BOTTOM,
-            .childGap = 10,
+            .childGap = 8,
             .childAlignment = {.x = CLAY_ALIGN_X_LEFT},
             .sizing = {
-              CLAY_SIZING_FIXED(280),
+              CLAY_SIZING_FIXED(240),
               CLAY_SIZING_FIT(0)
             },
-            .padding = {8, 8, 8, 16},
+            .padding = CLAY_PADDING_ALL(8),
           },
           .backgroundColor = COLOR_WHITE,
           .cornerRadius = CLAY_CORNER_RADIUS(4),
@@ -122,90 +106,102 @@ GuiUpdate(UIState* uiState)
             .color = COLOR_GRAY_800
           }
       }){
-        CLAY_TEXT(CLAY_STRING("Cube Position"), CLAY_TEXT_CONFIG({
-          .fontSize = 16,
-          .textColor = {0, 0, 0, 255} 
-        }));
-        *uiState->cubePositionEditSubmitted = false;
-        if (CustomClay_TextBox((Clay_Sizing){
-          .width = CLAY_SIZING_GROW(0),
-          .height = CLAY_SIZING_FIT(0)
-        }, uiState->cubePositionEditText, 100, uiState->cubePositionEditMode)){
-          *uiState->cubePositionEditSubmitted = true;
+        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)){
+          *uiState->isFocused = Clay_Hovered();
         }
-        CLAY_TEXT(CLAY_STRING("Cube Rotation"), CLAY_TEXT_CONFIG({
-          .fontSize = 16,
-          .textColor = {0, 0, 0, 255} 
-        }));
-        *uiState->cubeRotationEditSubmitted = false;
-        if (CustomClay_TextBox((Clay_Sizing){
-          .width = CLAY_SIZING_GROW(0),
-          .height = CLAY_SIZING_FIT(0)
-        }, uiState->cubeRotationEditText, 100, uiState->cubeRotationEditMode)){
-          *uiState->cubeRotationEditSubmitted = true;
-        }
-        *uiState->dodecaPositionEditSubmitted = false;
-        CLAY_TEXT(CLAY_STRING("Dodecahedron Position"), CLAY_TEXT_CONFIG({
-          .fontSize = 16,
-          .textColor = {0, 0, 0, 255} 
-        }));
-        if (CustomClay_TextBox((Clay_Sizing){
-          .width = CLAY_SIZING_GROW(0),
-          .height = CLAY_SIZING_FIT(0)
-        }, uiState->dodecaPositionEditText, 100, uiState->dodecaPositionEditMode)){
-          *uiState->dodecaPositionEditSubmitted = true;
-        }
-        *uiState->dodecaRotationEditSubmitted = false;
-        CLAY_TEXT(CLAY_STRING("Dodecahedron Rotation"), CLAY_TEXT_CONFIG({
-          .fontSize = 16,
-          .textColor = {0, 0, 0, 255} 
-        }));
-        if (CustomClay_TextBox((Clay_Sizing){
-          .width = CLAY_SIZING_GROW(0),
-          .height = CLAY_SIZING_FIT(0)
-        }, uiState->dodecaRotationEditText, 100, uiState->dodecaRotationEditMode)){
-          *uiState->dodecaRotationEditSubmitted = true;
-        }
-        if (CustomClay_CheckBox((Clay_Sizing){
-          .width = CLAY_SIZING_GROW(0),
-          .height = CLAY_SIZING_FIT(0)
-        }, "Wireframe", uiState->wireframeEnabled)){
-          *uiState->wireframeCheckToggled = true;
-        }
+
+        // Header
         CLAY({
           .layout = {
             .sizing = {
               .width = CLAY_SIZING_GROW(0),
               .height = CLAY_SIZING_FIT(0)
             },
+            .layoutDirection = CLAY_TOP_TO_BOTTOM,
             .childAlignment = {.x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER},
-            .childGap = 4,
+            .childGap = 8,
             .padding = CLAY_PADDING_ALL(4)
           },
         }){
-          // CustomClay_Button((Clay_Sizing){
-          //   .width = CLAY_SIZING_FIT(0),
-          //   .height = CLAY_SIZING_GROW(0)
-          // }, "Prev", uiState->prevPressed);
-          
-          *uiState->pauseToggled = false;
-          if (CustomClay_Toggle((Clay_Sizing){
-            .width = CLAY_SIZING_GROW(0),
-            .height = CLAY_SIZING_FIT(0)
-          }, "Paused", "Pause", uiState->pauseEnabled)){
-            *uiState->pauseToggled = true;
-          }
-          CustomClay_Button((Clay_Sizing){
-            .width = CLAY_SIZING_FIT(0),
-            .height = CLAY_SIZING_GROW(0)
-          }, "Next", uiState->nextPressed);
+          CLAY_TEXT(CLAY_STRING("Physics Body Info"), CLAY_TEXT_CONFIG({
+            .fontId = FONT_BOLD_ID,
+            .fontSize = 16,
+            .textColor = COLOR_BLACK
+          }));
+          // Name
+          Clay_String nameClayText = CustomClay_ToClayString(uiState->name);
+          CLAY_TEXT(nameClayText, CLAY_TEXT_CONFIG({
+            .fontSize = 16,
+            .textColor = COLOR_BLACK
+          }));
         }
-        Clay_String manifoldClayText = CustomClay_ToClayString(uiState->manifoldText);
-        CLAY_TEXT(manifoldClayText, CLAY_TEXT_CONFIG({
+        
+        // Position
+        CLAY_TEXT(CLAY_STRING("Position"), CLAY_TEXT_CONFIG({
+          .fontId = FONT_BOLD_ID,
           .fontSize = 16,
           .textColor = COLOR_BLACK
         }));
+        *uiState->positionSubmitted = CustomClay_TextBox((Clay_Sizing) {
+          .width = CLAY_SIZING_GROW(0),
+          .height = CLAY_SIZING_FIT(0)
+        }, uiState->position, 100, uiState->positionEditMode);
         
+        // Rotation
+        CLAY_TEXT(CLAY_STRING("Rotation"), CLAY_TEXT_CONFIG({
+          .fontId = FONT_BOLD_ID,
+          .fontSize = 16,
+          .textColor = COLOR_BLACK
+        }));
+        *uiState->rotationSubmitted = CustomClay_TextBox((Clay_Sizing) {
+          .width = CLAY_SIZING_GROW(0),
+          .height = CLAY_SIZING_FIT(0)
+        }, uiState->rotation, 100, uiState->rotationEditMode);
+
+        // Velocity
+        CLAY_TEXT(CLAY_STRING("Velocity"), CLAY_TEXT_CONFIG({
+          .fontId = FONT_BOLD_ID,
+          .fontSize = 16,
+          .textColor = COLOR_BLACK
+        }));
+        *uiState->velocitySubmitted = CustomClay_TextBox((Clay_Sizing) {
+          .width = CLAY_SIZING_GROW(0),
+          .height = CLAY_SIZING_FIT(0)
+        }, uiState->velocity, 100, uiState->velocityEditMode);
+
+        // Angular Velocity
+        CLAY_TEXT(CLAY_STRING("Angular Velocity"), CLAY_TEXT_CONFIG({
+          .fontId = FONT_BOLD_ID,
+          .fontSize = 16,
+          .textColor = COLOR_BLACK
+        }));
+        *uiState->angularVelocitySubmitted = CustomClay_TextBox((Clay_Sizing) {
+          .width = CLAY_SIZING_GROW(0),
+          .height = CLAY_SIZING_FIT(0)
+        }, uiState->angularVelocity, 100, uiState->angularVelocityEditMode);
+        
+        CLAY({
+          .layout = {
+            .sizing = {.width = CLAY_SIZING_GROW(0), .height = CLAY_SIZING_GROW(0)},
+            .layoutDirection = CLAY_LEFT_TO_RIGHT,
+            .childAlignment = {.x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER},
+            .childGap = 4,
+            .padding = CLAY_PADDING_ALL(4)
+          }
+        }){
+          CustomClay_Toggle((Clay_Sizing){
+            .width = CLAY_SIZING_GROW(0),
+            .height = CLAY_SIZING_FIT(0)
+          }, "Paused", "Running", uiState->isPaused);
+          CustomClay_Button((Clay_Sizing){
+            .width = CLAY_SIZING_FIT(0),
+            .height = CLAY_SIZING_FIT(0)
+          }, "Next", uiState->nextPressed);
+        };
+        *uiState->restartPressed = CustomClay_Button((Clay_Sizing){
+          .width = CLAY_SIZING_FIT(0),
+          .height = CLAY_SIZING_FIT(0)
+        }, "Restart", uiState->restartPressed);
       }
     }
   return Clay_EndLayout();

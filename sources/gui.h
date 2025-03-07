@@ -8,37 +8,29 @@
 #include "custom_clay.h"
 #include "def.h"
 
+// Store info of a selected physics body
 typedef struct UIState{
   Font* fonts;
   int32_t fontCount;
   MemArena memArena; // Stores all actual data
   // References to data
-  char* cubePositionEditText;
-  char* dodecaPositionEditText;
-  bool* cubePositionEditMode;
-  bool* dodecaPositionEditMode;
-  
-  char* cubeRotationEditText;
-  char* dodecaRotationEditText;
-  bool* cubeRotationEditMode;
-  bool* dodecaRotationEditMode;
-  
-  bool* cubePositionEditSubmitted;
-  bool* dodecaPositionEditSubmitted;
-  bool* cubeRotationEditSubmitted;
-  bool* dodecaRotationEditSubmitted;
-  
-  bool* wireframeEnabled;
-  bool* wireframeCheckToggled;
-  
-  bool* prevPressed;
+  char* name;
+  char* position;
+  bool* positionEditMode;
+  bool* positionSubmitted;
+  char* rotation;
+  bool* rotationEditMode;
+  bool* rotationSubmitted;
+  char* velocity;
+  bool* velocityEditMode;
+  bool* velocitySubmitted;
+  char* angularVelocity;
+  bool* angularVelocityEditMode;
+  bool* angularVelocitySubmitted;
+  bool* isPaused;
   bool* nextPressed;
-  bool* pauseToggled;
-  bool* pauseEnabled;
-
-  char* manifoldText;
-  char* cubePhysicsInfoText;
-  char* dodecaPhysicsInfoText;
+  bool* isFocused;
+  bool* restartPressed;
 } UIState;
 
 UIState GuiInit();

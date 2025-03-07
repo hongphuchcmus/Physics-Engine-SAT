@@ -19,3 +19,24 @@ Vector3 GetTriangleNormal(Triangle triangle)
   normal = Vector3Normalize(normal);
   return normal;
 }
+
+void DrawCubeBoundingBox(BoundingBox box, Color color, Color outlineColor){
+  Vector3 position = Vector3Scale(Vector3Add(box.min, box.max), 0.5f);
+  Vector3 extents = (Vector3) {box.max.x - position.x, box.max.y - position.y, box.max.z - position.z };
+  DrawCube(position, extents.x * 2, extents.y * 2, extents.z * 2, color);
+  DrawCubeWires(position, extents.x * 2, extents.y * 2, extents.z * 2, outlineColor);
+}
+
+void DrawCubeBoundingBoxPadding(BoundingBox box, Color color, Color outlineColor, float padding){
+  Vector3 position = Vector3Scale(Vector3Add(box.min, box.max), 0.5f);
+  Vector3 extents = (Vector3) {box.max.x - padding - position.x, box.max.y - padding - position.y , box.max.z - padding - position.z  };
+  DrawCube(position, extents.x * 2, extents.y * 2, extents.z * 2, color);
+  DrawCubeWires(position, extents.x * 2, extents.y * 2, extents.z * 2, outlineColor);
+}
+
+BoundingBox GetBoundingBoxMargin(BoundingBox box, float margin) {
+  return (BoundingBox){
+    .min = Vector3SubtractValue(box.min, margin),
+    .max = Vector3AddValue(box.max, margin)
+  };
+}

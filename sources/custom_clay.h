@@ -11,7 +11,7 @@
 
 bool CustomClay_CheckBox(Clay_Sizing claySizing, char* text, bool* isChecked);
 bool CustomClay_TextBox(Clay_Sizing claySizing, char* text, int maxLength,  bool* editMode);
-bool CustomClay_Toggle(Clay_Sizing claySizing, const char *pressedText, const char *unpressedText, bool* isPressed);
+void CustomClay_Toggle(Clay_Sizing claySizing, const char *pressedText, const char *unpressedText, bool* isPressed);
 bool CustomClay_Button(Clay_Sizing claySizing, const char* text, bool* isPressed);
 Clay_String CustomClay_ToClayString(char* charArray);
 

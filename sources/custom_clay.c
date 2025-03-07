@@ -220,6 +220,8 @@ bool CustomClay_TextBox(Clay_Sizing claySizing, char *text, int maxLength, bool 
   return false;
 }
 
+// This button won't use Clay_OnHover function as it is delayed and 
+// prevent making  a simple if {} statement for the button function
 bool CustomClay_Button(Clay_Sizing claySizing, const char *text, bool* isPressed)
 {
   if (isPressed == 0)
@@ -252,11 +254,11 @@ bool CustomClay_Button(Clay_Sizing claySizing, const char *text, bool* isPressed
 }
 
 
-bool CustomClay_Toggle(Clay_Sizing claySizing, const char *pressedText, const char *unpressedText, bool* isPressed)
+void CustomClay_Toggle(Clay_Sizing claySizing, const char *pressedText, const char *unpressedText, bool* isPressed)
 {
   if (isPressed == 0)
   {
-    return false;
+    return;
   }
   const char* text = *isPressed == true ? pressedText : unpressedText;
   CLAY({
@@ -286,6 +288,8 @@ Clay_String CustomClay_ToClayString(char *charArray)
       .chars = charArray};
 }
 
+// Return true if this check box is toggled, result may be a bit delayed
+// as it use Clay_OnHover()
 bool CustomClay_CheckBox(Clay_Sizing claySizing, char* text, bool* isChecked){
   bool clicked = false;
   

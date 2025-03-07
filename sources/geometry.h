@@ -15,5 +15,8 @@ typedef struct Edge {
 
 int CompareEdges(Edge a, Edge b);
 Vector3 GetTriangleNormal(Triangle triangle);
+void DrawCubeBoundingBox(BoundingBox box, Color color, Color outlineColor);
+void DrawCubeBoundingBoxPadding(BoundingBox box, Color color, Color outlineColor, float padding);
+BoundingBox GetBoundingBoxMargin(BoundingBox box, float margin);
 
 #endif

@@ -27,3 +27,7 @@ void * MemArenaAlloc(MemArena* arena, int32_t size, int32_t align, int32_t count
   arena->nextOffset = (char*)p + size * count;
   return memset(p, 0, size * count);
 }
+
+void MemSet(void* memory, int32_t value, int32_t size) {
+  memset(memory, value, size);
+}

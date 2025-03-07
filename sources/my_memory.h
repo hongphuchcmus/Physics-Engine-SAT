@@ -18,8 +18,7 @@ typedef struct MemArena {
 
 MemArena MemArenaNew(int32_t capacity);
 void MemArenaClear(MemArena* arena);
-void * MemArenaAlloc(MemArena* arena, int32_t size, int32_t align, int32_t count);
-void* DebugAlloc(size_t size);
-void DebugFree(void* ptr);
+void* MemArenaAlloc(MemArena* arena, int32_t size, int32_t align, int32_t count);
+void MemSet(void* memory, int32_t value, int32_t size);
 
 #endif

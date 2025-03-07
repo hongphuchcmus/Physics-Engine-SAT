@@ -9,7 +9,7 @@
 #include "rcamera.h"
 #include <stdio.h>
 
-#define GRAVITY 9.8f
+#define GRAVITY 10.0f
 #define COLLISION_TYPE_FACE_TO_VERTEX 0
 #define COLLISION_TYPE_VERTEX_TO_FACE 1
 #define COLLISION_TYPE_EDGE_TO_EDGE 2
@@ -22,10 +22,13 @@
 
 #define COLLIDER_TYPE_STATIC 0
 #define COLLIDER_TYPE_RIGID 1
-#define COLLIDER_STATIC_MASS 1e20f
 
 #define COLLIDER_SHAPE_CONVEX 0
 #define COLLIDER_SHAPE_SPHERE 1
+
+#define SLEEP_SPEED_THRESHOLD 1e-1f
+#define SLEEP_ANGULAR_SPEED_THRESHOLD 1e-1f 
+#define SLEEP_TIME 1.0f
 
 
 typedef struct Manifold {
@@ -81,6 +84,13 @@ typedef struct PhysicsBody {
   // For sphere shape
   float radius;
 
+  // Sleeping
+  // float sleepTimer;
+  // bool isSleeping;
+  
+  // // For calculating actual velocity
+  Vector3 lastPosition;
+  // bool hasContact;
 } PhysicsBody;
 
 Vector3 GetCenterOfContactPoints(Manifold* colInfo);
@@ -88,12 +98,12 @@ PhysicsBody LoadPhysicsBodyFromConvexMesh(Mesh mesh);
 PhysicsBody LoadPhysicsBodySphere(float radius);
 void UnloadPhysicsBody(PhysicsBody physicsBody);
 Manifold CheckCollisionPhysicsBodies(const PhysicsBody* body1, const PhysicsBody* body2);
+void PhysicsBodyApplyGravity(PhysicsBody* physicsBody, float delta);
 void DrawFaceNormals(PhysicsBody physicsBody);
 void DrawFaceNormalCoords(PhysicsBody physicsBody, Camera camera);
-void DrawPhysicsVertexIndices(PhysicsBody physicsBody, Camera camera);
 void PhysicsBodyUpdate(PhysicsBody* physicsBody, float delta);
 void PhysicsBodyAddImpulse(PhysicsBody* physicsBody, float delta, Vector3 impulse);
-void ResolveCollisionPhysicsBodies(PhysicsBody* body1, PhysicsBody* body2, Manifold* colInfo, float delta);
+void ResolveCollisionPhysicsBodies(PhysicsBody* body1, PhysicsBody* body2, Manifold* manifold, float delta);
 void WakeUp(PhysicsBody* physicsBody);
 void ManifoldToString(Manifold* colInfo, char* buffer);
 BoundingBox PhysicsBodyGetWorldBoundingBox(PhysicsBody* physicsBody);
@@ -103,6 +113,5 @@ float InvMass(PhysicsBody* physicsBody);
 float PhysicsBodyToString(const PhysicsBody* physicsBody, char* buffer);
 void DrawPhysicsBodyEdges(PhysicsBody* physicsBody);
 void DrawPhysicsBodyVertexIndices(const PhysicsBody* physicsBody, Camera camera);
-void DrawPhysicsBodyVertices(PhysicsBody* physicsBody);
-
+void DrawPhysicsBodyVertices(const PhysicsBody* physicsBody);
 #endif
