@@ -199,7 +199,7 @@ GuiUpdate(UIState* uiState)
           }, "Next", uiState->nextPressed);
         };
         *uiState->restartPressed = CustomClay_Button((Clay_Sizing){
-          .width = CLAY_SIZING_FIT(0),
+          .width = CLAY_SIZING_GROW(0),
           .height = CLAY_SIZING_FIT(0)
         }, "Restart", uiState->restartPressed);
       }

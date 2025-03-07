@@ -24,7 +24,7 @@ void GetTextFromFloat(float f, char* text) {
   sprintf(text, "%.3g", f);
 }
 
-void ApplyPhysicsBodyTransform(PhysicsBody* body, UIState* uiState) {
+void ApplyPhysicsBodyTransformFromUIState(PhysicsBody* body, UIState* uiState) {
   if (*uiState->positionSubmitted) {
     body->position = GetVector3FromText(uiState->position);
   }

@@ -48,6 +48,39 @@ int main(void)
     (Color) COLOR_YELLOW_800,
     (Color) COLOR_PURPLE_800
   };
+  
+  PhysicsBodyTransform physicsBodyInitialTransforms[] = {
+    (PhysicsBodyTransform) {
+      .position = (Vector3){0, 0, 0},
+      .velocity = (Vector3){0, 0, 0},
+      .angularVelocity = (Vector3){0, 0, 0},
+      .rotation = QuaternionIdentity()
+    },
+    (PhysicsBodyTransform) {
+      .position = (Vector3){-2.5f, 1.5f, -3},
+      .velocity = (Vector3){0, 0, 0},
+      .angularVelocity = (Vector3){0, 0, 0},
+      .rotation = QuaternionIdentity()
+    },
+    (PhysicsBodyTransform) {
+      .position = (Vector3){0.5f, 1.0f, -2.5f},
+      .velocity = (Vector3){0, 0, 0},
+      .angularVelocity = (Vector3){0, 0, 0},
+      .rotation = QuaternionIdentity()
+    },
+    (PhysicsBodyTransform) {
+      .position = (Vector3){0, 5.0f, -0.8f},
+      .velocity = (Vector3){0, 0, 0},
+      .angularVelocity = (Vector3){0, 0, 0},
+      .rotation = QuaternionIdentity()
+    },
+    (PhysicsBodyTransform) {
+      .position = (Vector3){0, 5.7f, -0.8f},
+      .velocity = (Vector3){0, 0, 0},
+      .angularVelocity = (Vector3){0, 0, 0},
+      .rotation = QuaternionIdentity()
+    }
+  };
 
   models[0] = LoadModelFromMesh(GenMeshCube(8, 1, 8));
   physicsBodies[0] = LoadPhysicsBodyFromConvexMesh(models[0].meshes[0]);
@@ -57,30 +90,26 @@ int main(void)
   models[1] = LoadModelFromMesh(GenMeshCube(3, 2, 2));
   physicsBodies[1] = LoadPhysicsBodyFromConvexMesh(models[1].meshes[0]);
   physicsBodies[1].colliderType = COLLIDER_TYPE_STATIC;
-  physicsBodies[1].position = (Vector3){-2.5f, 1.5f, -3};
   TextCopy(physicsBodies[1].bodyName, "static cube 1");
 
   models[2] = LoadModelFromMesh(GenMeshCube(3, 1, 3));
   physicsBodies[2] = LoadPhysicsBodyFromConvexMesh(models[2].meshes[0]);
   physicsBodies[2].colliderType = COLLIDER_TYPE_STATIC;
-  physicsBodies[2].position = (Vector3){0.5f, 1.0f, -2.5f};
   TextCopy(physicsBodies[2].bodyName, "static cube 2");
   
   models[3] = LoadModelFromMesh(GenMeshSphere(1, 4, 8));
   physicsBodies[3] = LoadPhysicsBodyFromConvexMesh(models[3].meshes[0]);
   physicsBodies[3].colliderType = COLLIDER_TYPE_RIGID;
-  physicsBodies[3].position = (Vector3){0, 5.0f, -0.8f};
-  physicsBodies[3].angularVelocity = (Vector3){0};
-  physicsBodies[3].angularVelocity = (Vector3){0, 0, 2.0f};
   TextCopy(physicsBodies[3].bodyName, "rigid convex 3");
 
   models[4] = LoadModelFromMesh(GenMeshSphere(1.0f, 6, 12));
   physicsBodies[4] = LoadPhysicsBodySphere(1.0f);
   physicsBodies[4].colliderType = COLLIDER_TYPE_RIGID;
-  physicsBodies[4].position = (Vector3){0, 5.7f, -0.8f};
-  physicsBodies[4].angularVelocity = (Vector3){0};
-  physicsBodies[3].angularVelocity = (Vector3){0, 0, -2.0f};
   TextCopy(physicsBodies[4].bodyName, "rigid sphere 4");
+
+  for (int32_t i = 0; i < physicsBodyCount; i++){
+    PhysicsBodyReplaceTransform(physicsBodies + i, physicsBodyInitialTransforms[i]);
+  }
 
   Manifold* manifolds = MemAlloc(20 * sizeof(Manifold));
   int32_t manifoldCount = 0;
@@ -107,13 +136,17 @@ int main(void)
     int32_t selected = -1;
     if (!*uiState.isFocused){
       GizmosUpdate(&gizmosState, camera, physicsBodies, physicsBodyCount);
-      if (gizmosState.selectedBody){
-        GetPhysicsBodyInfo(gizmosState.selectedBody, &uiState);
-      }
-    } else {
-      ApplyPhysicsBodyTransform(gizmosState.selectedBody, &uiState);
     }
-    
+    if (gizmosState.selectedBody){
+      GetPhysicsBodyInfo(gizmosState.selectedBody, &uiState);
+    }
+    ApplyPhysicsBodyTransformFromUIState(gizmosState.selectedBody, &uiState);
+    if (*uiState.restartPressed) {
+      for (int32_t i = 0; i < physicsBodyCount; i++) {
+        PhysicsBodyReplaceTransform(physicsBodies + i, physicsBodyInitialTransforms[i]);
+      }
+    }
+
     // Physics
     manifoldCount = 0;
     for (int32_t i = 0; i < physicsBodyCount - 1; i++) {
@@ -147,7 +180,7 @@ int main(void)
           DrawModelEx(models[i], physicsBodies[i].position,
             axis, angle * RAD2DEG, (Vector3){1, 1, 1}, (Color) colors[i % 5]);
           DrawModelWiresEx(models[i], physicsBodies[i].position,
-            axis, angle * RAD2DEG, (Vector3){1, 1, 1}, ColorBrightness(colors[i % 5], -0.5f));
+            axis, angle * RAD2DEG, (Vector3){1, 1, 1}, ColorBrightness(colors[i % 5], -0.3f));
         }
         // Debug manifolds
         for (int32_t i = 0; i < manifoldCount; i++)

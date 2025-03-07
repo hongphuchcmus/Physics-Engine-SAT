@@ -30,6 +30,12 @@
 #define SLEEP_ANGULAR_SPEED_THRESHOLD 1e-1f 
 #define SLEEP_TIME 1.0f
 
+typedef struct PhysicsBodyTransform {
+  Vector3 position;
+  Vector3 velocity;
+  Vector3 angularVelocity;
+  Quaternion rotation;
+} PhysicsBodyTransform;
 
 typedef struct Manifold {
   int32_t collisionType; 
@@ -84,13 +90,6 @@ typedef struct PhysicsBody {
   // For sphere shape
   float radius;
 
-  // Sleeping
-  // float sleepTimer;
-  // bool isSleeping;
-  
-  // // For calculating actual velocity
-  Vector3 lastPosition;
-  // bool hasContact;
 } PhysicsBody;
 
 Vector3 GetCenterOfContactPoints(Manifold* colInfo);
@@ -114,4 +113,6 @@ float PhysicsBodyToString(const PhysicsBody* physicsBody, char* buffer);
 void DrawPhysicsBodyEdges(PhysicsBody* physicsBody);
 void DrawPhysicsBodyVertexIndices(const PhysicsBody* physicsBody, Camera camera);
 void DrawPhysicsBodyVertices(const PhysicsBody* physicsBody);
+void PhysicsBodyReplaceTransform(PhysicsBody* physicsBody, PhysicsBodyTransform transform);
+
 #endif

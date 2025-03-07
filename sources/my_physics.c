@@ -1233,3 +1233,10 @@ void DrawPhysicsBodyVertices(const PhysicsBody *physicsBody) {
     DrawSphere(drawPos, 0.1f, DARKBLUE);
   }
 }
+
+void PhysicsBodyReplaceTransform(PhysicsBody *physicsBody, PhysicsBodyTransform transform) {
+  physicsBody->position = transform.position;
+  physicsBody->rotation = transform.rotation;
+  physicsBody->velocity = transform.velocity;
+  physicsBody->angularVelocity = transform.angularVelocity;
+}
