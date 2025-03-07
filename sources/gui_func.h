@@ -8,8 +8,9 @@
 
 Vector3 GetVector3FromText(char* text);
 void GetTextFromVector3(Vector3 v, char* text);
-void GetPhysicsBodyInfo(const PhysicsBody* body, UIState* uiState);
+// void GetPhysicsBodyInfo(const PhysicsBody* body, UIState* uiState);
 void GetTextFromFloat(float f, char* text);
 void ApplyPhysicsBodyTransformFromUIState(PhysicsBody* body, UIState* uiState);
+void UpdateUIStateFromPhysicsBody(const PhysicsBody* body, UIState* uiState);
 
 #endif

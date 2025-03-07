@@ -137,10 +137,11 @@ int main(void)
     if (!*uiState.isFocused){
       GizmosUpdate(&gizmosState, camera, physicsBodies, physicsBodyCount);
     }
-    if (gizmosState.selectedBody){
-      GetPhysicsBodyInfo(gizmosState.selectedBody, &uiState);
+    if (gizmosState.selectedBody != NULL){
+      ApplyPhysicsBodyTransformFromUIState(gizmosState.selectedBody, &uiState);
+      UpdateUIStateFromPhysicsBody(gizmosState.selectedBody, &uiState);
     }
-    ApplyPhysicsBodyTransformFromUIState(gizmosState.selectedBody, &uiState);
+
     if (*uiState.restartPressed) {
       for (int32_t i = 0; i < physicsBodyCount; i++) {
         PhysicsBodyReplaceTransform(physicsBodies + i, physicsBodyInitialTransforms[i]);
